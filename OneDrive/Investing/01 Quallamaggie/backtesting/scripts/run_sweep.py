@@ -69,7 +69,14 @@ def _generate_grid_variants(
             parts.append(f"{name}={val}")
 
         is_baseline = all(baseline.get(k) == v for k, v in zip(param_names, combo))
-        label = ("BASELINE_MATCH | " if is_baseline else "") + " | ".join(parts)
+        prefix = "BASELINE_MATCH" if is_baseline else ""
+        body = " | ".join(parts)
+        if prefix and body:
+            label = f"{prefix} | {body}"
+        elif prefix:
+            label = prefix
+        else:
+            label = body
         variants.append((label, variant))
 
     return variants

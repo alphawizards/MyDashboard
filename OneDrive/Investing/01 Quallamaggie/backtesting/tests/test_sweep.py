@@ -28,14 +28,13 @@ def test_generate_grid_count():
 
 
 def test_generate_grid_baseline_match_label():
-    """Exactly one variant matches baseline values and is labeled BASELINE_MATCH."""
+    """Exactly one variant starts with BASELINE_MATCH and its params equal baseline."""
     variants = _generate_grid_variants(BASELINE, GRID_A)
-    matches = [(label, p) for label, p in variants if "BASELINE_MATCH" in label]
+    matches = [(label, p) for label, p in variants if label.startswith("BASELINE_MATCH")]
     assert len(matches) == 1
-    _, params = matches[0]
-    assert params["max_pullback"] == 25.0
-    assert params["bbw_percentile"] == 50.0
-    assert params["min_prior_move"] == 30.0
+    label, params = matches[0]
+    assert label.startswith("BASELINE_MATCH")
+    assert params == BASELINE
 
 
 def test_generate_grid_non_grid_params_preserved():
@@ -63,3 +62,12 @@ def test_label_format():
         assert "max_pullback=" in label
         assert "bbw_percentile=" in label
         assert "min_prior_move=" in label
+
+
+def test_empty_grid_returns_single_baseline():
+    """Empty grid produces exactly one variant labeled BASELINE_MATCH with no trailing delimiter."""
+    variants = _generate_grid_variants(BASELINE, {})
+    assert len(variants) == 1
+    label, params = variants[0]
+    assert label == "BASELINE_MATCH"
+    assert params == BASELINE
