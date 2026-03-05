@@ -20,7 +20,9 @@ from loguru import logger
 
 sys.path.append(str(Path(__file__).parent.parent))
 
-from src.strategy.rev4_rules import PARAMS, TRIAL_COUNTER
+from src.strategy.rev4_rules import PARAMS, TRIAL_COUNTER, evaluate_setups
+from src.execution.backtester import Backtester
+from src.analysis.tearsheet import generate_report
 
 # ------------------------------------------------------------------
 # Grid definitions — edit values here to change sweep scope
@@ -80,11 +82,6 @@ def _generate_grid_variants(
         variants.append((label, variant))
 
     return variants
-
-
-from src.strategy.rev4_rules import evaluate_setups
-from src.execution.backtester import Backtester
-from src.analysis.tearsheet import generate_report
 
 
 def _run_sweep_variant(
