@@ -42,6 +42,13 @@ GROUP_B_GRID: dict[str, list[Any]] = {
 }
 
 
+def _fmt(v: object) -> float:
+    try:
+        return float(v)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return float("nan")
+
+
 def _is_finite(v: object) -> bool:
     """True if v is a non-None, finite number."""
     try:
@@ -173,7 +180,6 @@ def main() -> None:
         return
 
     # Lazy imports — only needed for live runs, not dry-run
-    from src.data.ingestion import DataPipeline  # noqa: F401
     from src.features.metrics import apply_all_features, apply_index_features
     from src.analysis.ledger import append_to_ledger
     from src.analysis.significance import deflated_sharpe_ratio
@@ -331,8 +337,8 @@ def main() -> None:
         for rank, row in enumerate(results_df.iter_rows(named=True), start=1):
             logger.info(
                 f"{rank:>4} {row['trial_number']:>7} "
-                f"{row['sharpe']:>8.2f} {row['cagr_pct']:>8.2f} "
-                f"{row['max_drawdown_pct']:>8.2f} {row['total_trades']:>7} "
+                f"{_fmt(row['sharpe']):>8.2f} {_fmt(row['cagr_pct']):>8.2f} "
+                f"{_fmt(row['max_drawdown_pct']):>8.2f} {row['total_trades']:>7} "
                 f"{str(row['dsr_passed']):>6}  {row['label']}"
             )
 
