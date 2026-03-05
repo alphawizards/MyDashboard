@@ -1,4 +1,5 @@
 import argparse
+import math
 import polars as pl
 import sys
 from pathlib import Path
@@ -9,8 +10,13 @@ sys.path.append(str(Path(__file__).parent.parent))
 
 from src.data.ingestion import DataPipeline
 from src.features.metrics import apply_all_features, apply_index_features
-from src.strategy.rev4_rules import evaluate_setups
+from src.strategy.rev4_rules import PARAMS, TRIAL_COUNTER, evaluate_setups
 from src.execution.backtester import Backtester
+from src.analysis.ledger import append_to_ledger
+from src.analysis.significance import deflated_sharpe_ratio
+from src.analysis.visual_tearsheet import generate_visual_tearsheet
+from src.analysis.trade_visualizer import generate_trade_visualizer
+from src.analysis.factor_ic import generate_factor_ic_report
 
 # Index tickers required for regime filter and RS computation
 INDEX_TICKERS = ["SPY", "QQQ"]
@@ -24,14 +30,22 @@ def _run_single(
     initial_capital: float,
     cost_multiplier: float,
     oos_start_date: str | None,
-) -> dict:
+    min_score: int | None = 6,
+    max_holding_days: int | None = 20,
+) -> tuple[dict, pl.DataFrame, pl.DataFrame]:
     """
     Run one backtest pass for a given cost multiplier and optional IS/OOS split.
-    Returns a summary dict for the comparison table.
+    Returns (metrics, trade_log, equity_curve) — equity_curve covers the IS
+    period (or full period when no split) and is used downstream for the
+    visual tearsheet's sensitivity overlay.
     """
     from src.analysis.tearsheet import generate_report
 
-    bt = Backtester(initial_capital=initial_capital)
+    bt = Backtester(
+        initial_capital=initial_capital,
+        min_score=min_score,
+        max_holding_days=max_holding_days,
+    )
 
     if oos_start_date:
         # IS pass
@@ -42,7 +56,11 @@ def _run_single(
         logger.info(f"OOS period: {oos_df['date'].min()} → {oos_df['date'].max()} ({len(oos_df)} rows)")
 
         is_trades, is_equity = bt.run_vectorized(is_df, cost_multiplier=cost_multiplier)
-        oos_bt = Backtester(initial_capital=initial_capital)
+        oos_bt = Backtester(
+            initial_capital=initial_capital,
+            min_score=min_score,
+            max_holding_days=max_holding_days,
+        )
         oos_trades, oos_equity = oos_bt.run_vectorized(oos_df, cost_multiplier=cost_multiplier)
 
         logger.info("=== IN-SAMPLE TEARSHEET ===")
@@ -53,12 +71,12 @@ def _run_single(
         # Degradation analysis
         _print_oos_comparison(is_metrics, oos_metrics)
 
-        return is_metrics
+        return is_metrics, is_trades, is_equity
 
     else:
         trades, equity_curve = bt.run_vectorized(equity_df, cost_multiplier=cost_multiplier)
         metrics = generate_report(trades, equity_curve)
-        return metrics
+        return metrics, trades, equity_curve
 
 
 def _print_oos_comparison(is_metrics: dict, oos_metrics: dict) -> None:
@@ -117,14 +135,153 @@ def _print_cost_sensitivity_table(results: list[dict]) -> None:
         logger.warning("FRAGILE STRATEGY: Negative CAGR at 2x transaction costs.")
 
 
+def _run_walk_forward(
+    equity_df: pl.DataFrame,
+    initial_capital: float,
+    cost_multiplier: float = 1.0,
+    is_months: int = 24,
+    oos_months: int = 6,
+) -> tuple[dict, pl.DataFrame, pl.DataFrame]:
+    """
+    Walk-forward validation: rolling IS/OOS windows concatenated into a single
+    out-of-sample equity curve.
+
+    Window schedule:
+        IS  window = is_months  trading months (~21 bars/month)
+        OOS window = oos_months trading months
+        Step = oos_months (non-overlapping OOS periods)
+
+    Returns (summary_metrics, concatenated_oos_trades, concatenated_oos_equity).
+    summary_metrics includes per-window Sharpe and the grand OOS Sharpe.
+    """
+    from src.analysis.tearsheet import generate_report
+
+    all_dates = sorted(equity_df["date"].unique().to_list())
+    n_dates = len(all_dates)
+
+    is_bars  = is_months  * 21   # approximate trading days
+    oos_bars = oos_months * 21
+
+    if n_dates < is_bars + oos_bars:
+        logger.warning(
+            f"Walk-forward requires >= {is_bars + oos_bars} trading days; "
+            f"only {n_dates} available. Skipping."
+        )
+        return {}, pl.DataFrame(), pl.DataFrame()
+
+    all_oos_trades:  list[pl.DataFrame] = []
+    all_oos_equity:  list[pl.DataFrame] = []
+    window_results:  list[dict]         = []
+
+    start_idx = 0
+    window_num = 0
+
+    while start_idx + is_bars + oos_bars <= n_dates:
+        window_num += 1
+
+        is_end_idx  = start_idx + is_bars
+        oos_end_idx = is_end_idx + oos_bars
+
+        is_start_date  = all_dates[start_idx]
+        is_end_date    = all_dates[is_end_idx - 1]
+        oos_start_date = all_dates[is_end_idx]
+        oos_end_date   = all_dates[min(oos_end_idx - 1, n_dates - 1)]
+
+        is_df  = equity_df.filter(
+            (pl.col("date") >= is_start_date) & (pl.col("date") <= is_end_date)
+        )
+        oos_df = equity_df.filter(
+            (pl.col("date") >= oos_start_date) & (pl.col("date") <= oos_end_date)
+        )
+
+        logger.info(
+            f"WF Window {window_num}: IS [{is_start_date} → {is_end_date}] | "
+            f"OOS [{oos_start_date} → {oos_end_date}]"
+        )
+
+        # IS run (for reference only — OOS is what we aggregate)
+        bt_is = Backtester(initial_capital=initial_capital)
+        _, _ = bt_is.run_vectorized(is_df, cost_multiplier=cost_multiplier)
+
+        # OOS run — fresh capital each window (avoids cross-window compounding bias)
+        bt_oos = Backtester(initial_capital=initial_capital)
+        oos_trades, oos_equity = bt_oos.run_vectorized(oos_df, cost_multiplier=cost_multiplier)
+
+        if len(oos_trades) > 0:
+            wf_metrics = generate_report(oos_trades, oos_equity, label=f"WF-OOS-W{window_num}")
+            wf_metrics["window"] = window_num
+            wf_metrics["oos_start"] = str(oos_start_date)
+            wf_metrics["oos_end"]   = str(oos_end_date)
+            window_results.append(wf_metrics)
+            all_oos_trades.append(oos_trades)
+            all_oos_equity.append(oos_equity)
+        else:
+            logger.warning(f"WF Window {window_num}: no OOS trades generated.")
+
+        # Step forward by one OOS window
+        start_idx += oos_bars
+
+    if not window_results:
+        logger.warning("Walk-forward: no OOS windows produced trades.")
+        return {}, pl.DataFrame(), pl.DataFrame()
+
+    # ------------------------------------------------------------------
+    # Aggregate across all OOS windows
+    # ------------------------------------------------------------------
+    combined_trades = pl.concat(all_oos_trades)
+    combined_equity = pl.concat(all_oos_equity).sort("date")
+
+    logger.info("=" * 65)
+    logger.info(f"WALK-FORWARD SUMMARY  ({window_num} windows, {is_months}m IS / {oos_months}m OOS)")
+    logger.info("=" * 65)
+    header = f"{'Window':>8} {'OOS Start':>12} {'OOS End':>12} {'CAGR':>8} {'Sharpe':>8} {'WR%':>7} {'PF':>7}"
+    logger.info(header)
+    logger.info("-" * 65)
+    sharpes = []
+    for w in window_results:
+        cagr   = w.get("cagr_pct", float("nan"))
+        sharpe = w.get("sharpe", float("nan"))
+        wr     = w.get("win_rate_pct", float("nan"))
+        pf     = w.get("profit_factor", float("nan"))
+        logger.info(
+            f"{w['window']:>8}  {w['oos_start']:>12}  {w['oos_end']:>12} "
+            f"{cagr:>7.1f}% {sharpe:>8.2f} {wr:>6.1f}% {pf:>7.2f}"
+        )
+        if not (sharpe != sharpe):  # exclude NaN
+            sharpes.append(sharpe)
+
+    # Positive-Sharpe window hit rate
+    n_positive = sum(1 for s in sharpes if s > 0)
+    logger.info("-" * 65)
+    if sharpes:
+        logger.info(
+            f"Positive-Sharpe windows: {n_positive}/{len(sharpes)} "
+            f"({n_positive / len(sharpes) * 100:.0f}%)"
+        )
+    else:
+        logger.warning(
+            "No windows produced enough trades to compute Sharpe. "
+            "Consider relaxing --min-score or expanding the ticker universe."
+        )
+        n_positive = 0
+
+    # Grand OOS metrics over all concatenated trades
+    grand_metrics = generate_report(combined_trades, combined_equity, label="WF-GRAND-OOS")
+    grand_metrics["wf_windows"] = window_num
+    grand_metrics["wf_positive_windows"] = n_positive
+    grand_metrics["wf_window_results"] = window_results
+
+    return grand_metrics, combined_trades, combined_equity
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Qullamaggie Rev4 Quant Backtester")
-    parser.add_argument("--tickers", nargs="+", default=["TSLA", "NVDA", "AMD"],
-                        help="List of equity tickers to backtest")
-    parser.add_argument("--start", type=str, default="2020-01-01",
-                        help="Start Date (YYYY-MM-DD)")
-    parser.add_argument("--end", type=str, default="2023-12-31",
-                        help="End Date (YYYY-MM-DD)")
+    parser.add_argument("--tickers", nargs="+", default=None,
+                        help="Explicit ticker list. Omit to use full universe from parquet.")
+    parser.add_argument("--start", type=str, default="2016-01-01",
+                        help="Start Date filter (YYYY-MM-DD). Applied after parquet load.")
+    parser.add_argument("--end", type=str, default="2026-12-31",
+                        help="End Date filter (YYYY-MM-DD). Applied after parquet load.")
     parser.add_argument("--oos-start", type=str, default=None,
                         help="Start of Out-of-Sample period (YYYY-MM-DD). "
                              "Default: 70%% of date range.")
@@ -133,27 +290,83 @@ def main() -> None:
                         help="Cost sensitivity multipliers (default: 1.0 2.0 3.0)")
     parser.add_argument("--initial-capital", type=float, default=100_000.0,
                         help="Starting capital in USD (default: 100000)")
+    parser.add_argument("--fetch", action="store_true",
+                        help="Force re-fetch from Alpaca API even if parquet exists. "
+                             "Without this flag, existing parquet is loaded directly.")
+    parser.add_argument("--output", type=str, default=None,
+                        help="Output path for the visual tearsheet PDF "
+                             "(default: backtesting/tearsheet_<label>.pdf)")
+    parser.add_argument("--no-visual", action="store_true",
+                        help="Skip PDF tearsheet generation (text metrics only).")
+    parser.add_argument("--no-trade-viz", action="store_true",
+                        help="Skip trade-level visualizer PDF (annotated charts, MAE/MFE, etc.).")
+    parser.add_argument("--max-trade-charts", type=int, default=20,
+                        help="Maximum annotated trade charts to render (default: 20).")
+    parser.add_argument("--walk-forward", action="store_true",
+                        help="Run rolling walk-forward validation (24m IS / 6m OOS) "
+                             "in addition to static IS/OOS split.")
+    parser.add_argument("--factor-ic", action="store_true",
+                        help="Run cross-sectional Factor IC analysis and emit "
+                             "factor_ic.pdf. Computes Spearman IC for all Rev4 metrics "
+                             "vs 5/10/20-day forward returns on universe-qualified rows.")
+    parser.add_argument("--min-score", type=int, default=6,
+                        help="Minimum conviction score required for entry (default: 6). "
+                             "Set 0 to disable.")
+    parser.add_argument("--time-stop", type=int, default=20,
+                        help="Maximum holding period in trading days (default: 20). "
+                             "Set 0 to disable.")
     args = parser.parse_args()
 
     BASE_DIR = Path(__file__).parent.parent
     DATA_DIR = BASE_DIR / "data"
+    PARQUET_PATH = DATA_DIR / "processed" / "historical_bars.parquet"
 
     logger.info("=== QULLAMAGGIE REV4 SYSTEM INITIALIZATION ===")
 
     # ------------------------------------------------------------------
-    # 1. Data Ingestion — equities + index benchmarks
+    # 1. Data Ingestion — use existing parquet or fetch from Alpaca
     # ------------------------------------------------------------------
-    pipeline = DataPipeline(DATA_DIR / "raw", DATA_DIR / "processed")
-
-    all_tickers = list(set(args.tickers + INDEX_TICKERS))
-    pipeline.ingest_daily_bars(all_tickers, args.start, args.end)
+    if args.fetch or not PARQUET_PATH.exists():
+        # Only hit the API when explicitly requested or no local data exists.
+        pipeline = DataPipeline(DATA_DIR / "raw", DATA_DIR / "processed")
+        fetch_tickers = list(set((args.tickers or ["TSLA", "NVDA", "AMD"]) + INDEX_TICKERS))
+        logger.info(f"Fetching {len(fetch_tickers)} tickers from Alpaca API...")
+        pipeline.ingest_daily_bars(fetch_tickers, args.start, args.end)
+    else:
+        logger.info(f"Using existing parquet: {PARQUET_PATH}")
 
     try:
-        df = pl.read_parquet(DATA_DIR / "processed" / "historical_bars.parquet")
-        logger.success(f"Loaded {len(df)} rows from Parquet for backtesting.")
+        df = pl.read_parquet(PARQUET_PATH)
+        logger.success(f"Loaded {len(df):,} rows from Parquet.")
     except Exception as e:
         logger.error(f"Failed to load parquet data. Exiting: {e}")
         return
+
+    # ------------------------------------------------------------------
+    # 1b. Apply date range filter
+    # ------------------------------------------------------------------
+    df = df.with_columns(pl.col("date").cast(pl.Date))
+    df = df.filter(
+        (pl.col("date") >= pl.lit(args.start).str.to_date()) &
+        (pl.col("date") <= pl.lit(args.end).str.to_date())
+    )
+    logger.info(
+        f"Date filter [{args.start} → {args.end}]: {len(df):,} rows retained."
+    )
+
+    # ------------------------------------------------------------------
+    # 1c. Apply ticker filter (optional — default is full universe)
+    # ------------------------------------------------------------------
+    if args.tickers:
+        # Ensure index tickers are always included for regime filter / RS
+        keep = list(set(args.tickers + INDEX_TICKERS))
+        df = df.filter(pl.col("ticker").is_in(keep))
+        logger.info(f"Ticker filter: restricted to {len(keep)} tickers ({len(df):,} rows).")
+    else:
+        logger.info(
+            f"Full universe mode: {df['ticker'].n_unique():,} tickers loaded. "
+            f"Strategy gates will screen to qualified names."
+        )
 
     # ------------------------------------------------------------------
     # 2. Split equities from index data
@@ -164,6 +377,11 @@ def main() -> None:
     if len(equity_df) == 0:
         logger.error("No equity data after splitting index tickers.")
         return
+
+    logger.info(
+        f"Universe: {equity_df['ticker'].n_unique():,} equities, "
+        f"{index_df['ticker'].n_unique()} index benchmarks."
+    )
 
     # ------------------------------------------------------------------
     # 3. Feature Engineering
@@ -218,38 +436,196 @@ def main() -> None:
     logger.success(f"Discovered Setups — A: {setup_a_count}, B: {setup_b_count}, C: {setup_c_count}")
 
     # ------------------------------------------------------------------
+    # 4b. Factor IC Analysis (optional)  -- runs on full date range for
+    #     maximum statistical power before the IS/OOS split is applied.
+    # ------------------------------------------------------------------
+    if args.factor_ic:
+        ic_output = BASE_DIR / "factor_ic.pdf"
+        try:
+            generate_factor_ic_report(
+                df=equity_df,
+                output_path=ic_output,
+                filter_col="pass_universe",
+            )
+        except Exception as exc:
+            logger.error(f"Factor IC analysis failed: {exc}")
+
+    # ------------------------------------------------------------------
     # 5. Derive OOS start date if not provided  (backtestprep.md §5.2)
     # ------------------------------------------------------------------
+    # IS/OOS split is ALWAYS applied.  For cost sensitivity sweeps each
+    # multiplier runs with the same IS/OOS boundary so the comparison is
+    # apples-to-apples.
     oos_start = args.oos_start
-    if oos_start is None and len(args.cost_multiplier) == 1:
-        # Only auto-split when running a single cost pass (not sensitivity sweep)
+    if oos_start is None:
         all_dates = sorted(equity_df["date"].unique().to_list())
         if len(all_dates) >= 10:
             split_idx = int(len(all_dates) * 0.70)
             oos_start = str(all_dates[split_idx])
             logger.info(f"Auto IS/OOS split at 70%: OOS starts {oos_start}")
+        else:
+            logger.warning("Fewer than 10 unique dates — IS/OOS split skipped.")
 
     # ------------------------------------------------------------------
-    # 6. Execution Simulator — cost sensitivity sweep
+    # 6. Execution Simulator — cost sensitivity sweep with IS/OOS
     # ------------------------------------------------------------------
     multipliers = args.cost_multiplier
     sensitivity_results: list[dict] = []
+    # Equity curves per multiplier for cost-sensitivity overlay on the tearsheet
+    sensitivity_curves: dict[float, tuple[list, list[float]]] = {}
+
+    primary_trade_log: pl.DataFrame | None = None
+    primary_equity_curve: pl.DataFrame | None = None
+    primary_metrics: dict = {}
+
+    min_score_arg    = args.min_score    if args.min_score    > 0 else None
+    time_stop_arg    = args.time_stop    if args.time_stop    > 0 else None
+
+    logger.info(
+        f"Entry gates — min_score: {min_score_arg}, "
+        f"max_holding_days: {time_stop_arg}, "
+        f"vol_surge: strict (1.2x)"
+    )
 
     for mult in multipliers:
         if len(multipliers) > 1:
             logger.info(f"--- Cost multiplier: {mult}x ---")
-        metrics = _run_single(
+        metrics, trade_log, equity_curve = _run_single(
             equity_df=equity_df,
             initial_capital=args.initial_capital,
             cost_multiplier=mult,
-            oos_start_date=oos_start if len(multipliers) == 1 else None,
+            oos_start_date=oos_start,
+            min_score=min_score_arg,
+            max_holding_days=time_stop_arg,
         )
         if metrics:
             metrics["cost_multiplier"] = mult
             sensitivity_results.append(metrics)
 
+        # Collect equity curve for cost-sensitivity overlay
+        if equity_curve is not None and len(equity_curve) > 0 and "date" in equity_curve.columns:
+            sensitivity_curves[mult] = (
+                equity_curve["date"].to_list(),
+                equity_curve["equity"].to_list(),
+            )
+
+        # Keep 1x run (or first run) as the primary for the main tearsheet panels
+        if mult == 1.0 or primary_trade_log is None:
+            primary_trade_log = trade_log
+            primary_equity_curve = equity_curve
+            primary_metrics = metrics
+
     if len(multipliers) > 1:
         _print_cost_sensitivity_table(sensitivity_results)
+
+    # ------------------------------------------------------------------
+    # 7. Visual Tearsheet (PDF)  — all 10 panels
+    # ------------------------------------------------------------------
+    if not args.no_visual and primary_trade_log is not None:
+        ts_label = "IN-SAMPLE" if oos_start else "FULL_PERIOD"
+        default_output = BASE_DIR / f"tearsheet_{ts_label}.pdf"
+        output_path = Path(args.output) if args.output else default_output
+
+        try:
+            generate_visual_tearsheet(
+                trade_log=primary_trade_log,
+                equity_curve=primary_equity_curve,
+                metrics=primary_metrics,
+                output_path=output_path,
+                initial_capital=args.initial_capital,
+                oos_start_date=oos_start,
+                label=ts_label,
+                sensitivity_curves=sensitivity_curves if len(sensitivity_curves) > 1 else None,
+                n_trials=len(multipliers),
+            )
+        except Exception as exc:
+            logger.error(f"Visual tearsheet generation failed: {exc}")
+
+    # ------------------------------------------------------------------
+    # 7b. Trade-Level Visualizer (PDF) — annotated charts + diagnostics
+    # ------------------------------------------------------------------
+    if not args.no_visual and not args.no_trade_viz and primary_trade_log is not None and len(primary_trade_log) > 0:
+        tv_label = "IN-SAMPLE" if oos_start else "FULL_PERIOD"
+        tv_output = BASE_DIR / f"trade_visualizer_{tv_label}.pdf"
+
+        try:
+            generate_trade_visualizer(
+                trade_log=primary_trade_log,
+                ohlcv_data=equity_df,
+                output_path=tv_output,
+                max_annotated_charts=args.max_trade_charts,
+                max_holding_days=time_stop_arg or 20,
+            )
+        except Exception as exc:
+            logger.error(f"Trade visualizer generation failed: {exc}")
+
+    # ------------------------------------------------------------------
+    # 8. Walk-Forward Validation (optional)
+    # ------------------------------------------------------------------
+    if args.walk_forward:
+        logger.info("=== WALK-FORWARD VALIDATION (24m IS / 6m OOS) ===")
+        wf_metrics, wf_trades, wf_equity = _run_walk_forward(
+            equity_df=equity_df,
+            initial_capital=args.initial_capital,
+            cost_multiplier=1.0,           # always 1x for WF to isolate strategy signal
+        )
+
+        if not args.no_visual and len(wf_trades) > 0:
+            wf_output = BASE_DIR / "tearsheet_WALK_FORWARD.pdf"
+            try:
+                generate_visual_tearsheet(
+                    trade_log=wf_trades,
+                    equity_curve=wf_equity,
+                    metrics=wf_metrics,
+                    output_path=wf_output,
+                    initial_capital=args.initial_capital,
+                    oos_start_date=None,
+                    label="WALK-FORWARD OOS",
+                    sensitivity_curves=None,
+                    n_trials=len(multipliers),
+                )
+            except Exception as exc:
+                logger.error(f"Walk-forward tearsheet generation failed: {exc}")
+
+    # ------------------------------------------------------------------
+    # 9. Experiment Ledger — append-only trial record
+    # ------------------------------------------------------------------
+    dsr_passed: bool | None = None
+    if primary_metrics and primary_equity_curve is not None and len(primary_equity_curve) > 0:
+        sr   = primary_metrics.get("sharpe")
+        skew = primary_metrics.get("skewness")
+        kurt = primary_metrics.get("kurtosis")
+        T    = len(primary_equity_curve)
+
+        def _finite(v: object) -> bool:
+            try:
+                return v is not None and math.isfinite(float(v))  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return False
+
+        if _finite(sr) and _finite(skew) and _finite(kurt) and T > 1:
+            dsr_result = deflated_sharpe_ratio(
+                observed_sr=float(sr),        # type: ignore[arg-type]
+                n_trials=TRIAL_COUNTER,
+                T=T,
+                skew=float(skew),             # type: ignore[arg-type]
+                excess_kurtosis=float(kurt),  # type: ignore[arg-type]
+            )
+            dsr_passed = dsr_result.get("passes")
+            logger.info(
+                f"DSR: {dsr_result.get('dsr', float('nan')):.4f}  "
+                f"(p={dsr_result.get('p_value', float('nan')):.4f}, "
+                f"n_trials={TRIAL_COUNTER})  passes={dsr_passed}"
+            )
+
+    append_to_ledger(
+        params=PARAMS,
+        metrics=primary_metrics,
+        trial_number=TRIAL_COUNTER,
+        ledger_path=BASE_DIR / "backtest_ledger.csv",
+        dsr_passed=dsr_passed,
+        run_label="IN-SAMPLE" if oos_start else "FULL_PERIOD",
+    )
 
     logger.success("Rev4 backtest pipeline complete.")
 
