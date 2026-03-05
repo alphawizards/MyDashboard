@@ -71,3 +71,17 @@ def test_empty_grid_returns_single_baseline():
     label, params = variants[0]
     assert label == "BASELINE_MATCH"
     assert params == BASELINE
+
+
+from scripts.run_sweep import _run_sweep_variant
+
+
+def test_run_sweep_variant_signature():
+    """_run_sweep_variant is importable and has expected signature."""
+    import inspect
+    sig = inspect.signature(_run_sweep_variant)
+    params = list(sig.parameters.keys())
+    assert "equity_df" in params
+    assert "oos_start" in params
+    assert "params" in params
+    assert "initial_capital" in params

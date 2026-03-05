@@ -80,3 +80,46 @@ def _generate_grid_variants(
         variants.append((label, variant))
 
     return variants
+
+
+from src.strategy.rev4_rules import evaluate_setups
+from src.execution.backtester import Backtester
+from src.analysis.tearsheet import generate_report
+
+
+def _run_sweep_variant(
+    equity_df: pl.DataFrame,
+    oos_start: str | None,
+    params: dict[str, Any],
+    initial_capital: float,
+    min_score: int | None,
+    max_holding_days: int | None,
+    cost_multiplier: float = 1.0,
+) -> tuple[dict[str, Any], pl.DataFrame]:
+    """
+    Runs evaluate_setups + IS backtester for one parameter variant.
+
+    Returns (metrics_dict, is_equity_curve).
+    metrics_dict is empty {} if no trades were generated.
+    """
+    sweep_df = evaluate_setups(equity_df, params=params)
+
+    if oos_start:
+        is_df = sweep_df.filter(
+            pl.col("date") < pl.lit(oos_start).str.to_date()
+        )
+    else:
+        is_df = sweep_df
+
+    bt = Backtester(
+        initial_capital=initial_capital,
+        min_score=min_score,
+        max_holding_days=max_holding_days,
+    )
+    trades, equity_curve = bt.run_vectorized(is_df, cost_multiplier=cost_multiplier)
+
+    if len(trades) == 0:
+        return {}, equity_curve
+
+    metrics = generate_report(trades, equity_curve, initial_capital=initial_capital)
+    return metrics, equity_curve
