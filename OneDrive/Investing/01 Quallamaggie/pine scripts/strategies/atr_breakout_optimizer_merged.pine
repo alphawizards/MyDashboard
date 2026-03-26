@@ -382,10 +382,10 @@ if goTests=='External Example' // Determine the lengths you will be testing in a
     uniLen3_min  := 0.0   // Min Confidence min
     uniLen3_step := 0.05
 
-YourFunction(int len1, int len2, int len3) =>
+YourFunction(int len1, float len2, float len3) =>
     float atrPeriod = float(len1)
-    float volThresh = float(len2)
-    float minConf   = float(len3)
+    float volThresh = len2
+    float minConf   = len3
 
     float _atr     = ta.atr(int(atrPeriod))
     float _avgAtr  = ta.sma(_atr, 5)
@@ -489,7 +489,7 @@ stop(series string strOpt) =>
             goShort := newpvtH and not inTrade and not inShort[pvtlen*10]
 
         'External Example' => // Example of using built-in signals & Lengths
-            [buy, sell] = YourFunction(int(x1_Len), int(x2_Len), int(x3_Len))
+            [buy, sell] = YourFunction(int(x1_Len), x2_Len, x3_Len)
             goLong  := buy  and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
             goShort := sell and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
             goLong  := not inTrade[1] and goLong  [1] ? true : goLong 
