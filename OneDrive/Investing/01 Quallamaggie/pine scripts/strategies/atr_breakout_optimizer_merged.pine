@@ -382,11 +382,45 @@ if goTests=='External Example' // Determine the lengths you will be testing in a
     uniLen3_min  := 0.0   // Min Confidence min
     uniLen3_step := 0.05
 
-YourFunction(int len1, int len2, int len3) => // Example MA Crosses
-    MA1  = MA(slType(len1, 'ma'), close, len2)
-    MA2  = MA(slType(len1, 'ma'), close, len3)
-    buy  = ta.crossunder(MA1, MA2)
-    sell = ta.crossover(MA1, MA2)
+YourFunction(int len1, int len2, int len3) =>
+    float atrPeriod = float(len1)
+    float volThresh = float(len2)
+    float minConf   = float(len3)
+
+    float _atr     = ta.atr(int(atrPeriod))
+    float _avgAtr  = ta.sma(_atr, 5)
+    float _tr      = ta.tr(true)
+    float _pctChg  = nz(close[1]) != 0 ? math.abs((close - close[1]) / close[1]) * 100.0 : 0.0
+    bool  _hasData = not na(_atr) and not na(_avgAtr) and _avgAtr > 0
+
+    // Entry conditions — mirrors atr_breakout_strategy.pine exactly
+    _lvBreak = _hasData and _atr < _avgAtr * 0.9 and _tr > _avgAtr * (volThresh * 0.8)
+    _hvMom   = _hasData and _atr > _avgAtr * 1.1 and (close - close[1]) > 0 and _pctChg > 1.0
+    _hvRev   = _hasData and _atr > _avgAtr * volThresh and (close - close[1]) < 0 and _pctChg > 1.0
+    _extVol  = _hasData and _atr > _avgAtr * (volThresh * 1.5)
+
+    // Confidence scoring — identical to strategy source
+    float buyConf = 0.0
+    if _lvBreak or _hvMom
+        buyConf := 0.3
+        if _lvBreak
+            buyConf += math.min((_avgAtr * volThresh - _atr) / _avgAtr * 2.0, 0.4)
+        if _hvMom
+            buyConf += math.min(_pctChg / 5.0, 0.3)
+        buyConf := math.min(buyConf, 1.0)
+
+    float sellConf = 0.0
+    if _hvRev or _extVol
+        sellConf := 0.3
+        if _hvRev
+            sellConf += math.min(_pctChg / 5.0, 0.3)
+            sellConf += math.min((_atr - _avgAtr * volThresh) / _avgAtr, 0.2)
+        if _extVol
+            sellConf += math.min((_atr - _avgAtr * volThresh) / _avgAtr, 0.4)
+        sellConf := math.min(sellConf, 1.0)
+
+    buy  = buyConf  >= minConf and (_lvBreak or _hvMom)
+    sell = sellConf >= minConf and (_hvRev or _extVol)
     [buy, sell]
 
 YourFunction1(int len1, int len2, int len3) => // Example MACD (Moving Average Convergence/Divergence)
