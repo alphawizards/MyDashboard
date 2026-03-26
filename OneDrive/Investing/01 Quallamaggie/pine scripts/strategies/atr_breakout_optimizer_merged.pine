@@ -1,0 +1,1078 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// @HALDRO Project
+// @version=6
+indicator('*Auto Backtest & Optimize Engine', overlay=true)
+
+// ———————— ToolTips
+TT_1 = '● Part ━ Number of Parts needed to view All Combinations.' + '\n'
+     + '● Source ━ Selecting the Source for the calculation.' + '\n'
+     + '● ID ━ Identification number to analyze the result. '
+TT_2 = '● Sort ━ Selecting the result sorting in Table. From higher(better) to lower(worse).' + '\n'
+     + '● Filters ━ Filtering the result in Table.' + '\n'
+     + '● > ━ For example if Trade in Filters > 10. Results where the number of Trades is less will be deleted.' + '\n'
+     + ' ⓘ Filtering & Sort in the case of Max Drawdown works in the opposite direction.'
+TT_3 = '● R:R ━ Risk Reward sets the TP depending on the size of the SL. For example, if SL is 10%, and R:R=2, then the TP is 20%.' + '\n'
+     + '● FIXED % ━ Fixed SL/TP in Percent.' + '\n'
+     + '● Trailing ━ Trailing Stop calculated basis of the Volaty mode.' + '\n'
+     + '● Fast Trail ━ Similar to Trailing, but faster to follow the price.' + '\n'
+     + '● Volatility ━ Volatility Stop. TV indicator similar with Trailing' + '\n'
+     + '● Chandelier ━ Dynamic Stop based on Highest and Lowest.' + '\n'
+     + '● Activator ━ Dynamic Stop based on SAR.' + '\n'
+     + '● MA ━ Moving Average SL. Very flexible type SL.' + '\n'
+     + '● SAR ━ Dynamic Stop Parabolic SAR(Stop and Reverse).' + '\n'
+     + '● Auto ━ Auto mode tests all SL types together.' + '\n'
+     + ' ⓘ SAR in Auto works incorrectly. MA in Auto mode works only one from selected in MA Stops.' + '\n'
+     + 'Auto MA mode tests all types of MA Stop Losses.' + '\n'
+     + ' ⓘ Auto MA does not test modes from Auto.' + '\n'
+TT_4 = '● T.VOLATY ━ Take Profit calculation on selected Volaty mode.' + '\n'
+     + '● S.VOLATY ━ Stop Loss calculation on selected Volaty mode.' + '\n'
+     + ' ⓘ VOLATY Type affects the starting position of SL/TP and their calculation and results'
+TT_5 = 'Trade Type ━ You can disable Long or Short, but only in the statistic Table.' + '\n'
+     + 'MA Stops ━ Adaptive Moving Averages Stop Losses.' + '\n'
+     + ' ⓘ Select MA mode in Stop Loss to test 1 of 9 moving averages.' + '\n'
+     + ' ⓘ Select Auto MA mode in Stop Loss to test all types of MA together.'
+TT_6 = '● Testing ━ Mode to Tests.' + '\n'
+     + '  ● Stops ━ Trailing Stops.' + '\n'
+     + '  ● Pivot Point Example ━ Example of a built-in indicator based on Extreme Points.' + '\n'
+     + '  ● External Example ━ Example of External Source for Length Testing.' + '\n'
+     + '  ● External Signal ━ Example of External Source for Signal Testing.' + '\n'
+     + '● BackWin ━ Backtest Window Number of Candle the script can test. It\'s Important option!' + '\n'
+     + ' ⓘ The quantity is based on the weight of the functions, the Size of the Part, and your TV tariff.' + '\n'
+     + ' ⓘ The default value is good enough for most cases. On paid tariffs the limits will be reduced.' + '\n'
+     + ' ⓘ The lower the timeframe and the larger the Window to Test, the higher the load.'
+TT_7 = '● Pivot Length ━ Number of candles for extreme detection.' + '\n'
+     + '● Manual Start ━ Enabling it will allow you to call a Stop from a selected point.'
+
+
+// ———————— Main Inputs
+portion       = input.int    (1,                 'Part',               inline='one', minval=1, maxval=9000) - 1
+src           = input.string ('hl2',             'Source',             inline='one', options=['open', 'high', 'low', 'close', 'ohlc4', 'hlcc4', 'hlc3', 'hl2', 'high/low', 'low/high'])
+bestid        = input.int    (-1,                'ID',                 inline='one', tooltip=TT_1, minval=-1)
+sortstat      = input.string ('Score',           'Sort',               inline='two', options=['Trade', 'Net Profit', 'Score', 'Win Rate' , 'Profit Factor', 'Max Drawdown'])
+filtstat      = input.string ('Trade',           'Filters',            inline='two', options=['None', 'Trade', 'Net Profit', 'Win Rate' , 'Profit Factor', 'Max Drawdown'])
+filtValue     = input.float  (10.0,              '> ',                 inline='two', tooltip=TT_2)
+tpTypeI       = input.string ('None',            '  𝐓𝐚𝐤𝐞 𝐏𝐫𝐨𝐟𝐢𝐭',      inline='type', options=['None', 'T.ᴠᴏʟᴀᴛʏ', 'R:R']) 
+slTypeI       = input.string ('Auto',            '  𝐒𝐭𝐨𝐩 𝐋𝐨𝐬𝐬 ',       inline='type', options=['None', 'Auto', 'Auto MA', '[1] S.ᴠᴏʟᴀᴛʏ', '[2] Trailing', '[3] Fast Trail', '[4] Volatility', '[5] Chandelier', '[6] Activator', '[7] MA', '[8] SAR'], tooltip=TT_3)
+tvolatyType   = input.string ('ATR',             '  T.ᴠᴏʟᴀᴛʏ   ',      inline='vol', options=['ATR', 'STDEV', 'T.FIXED %'])
+volatyType    = input.string ('ATR',             '  S.ᴠᴏʟᴀᴛʏ   ',      inline='vol', options=['ATR', 'STDEV', 'S.FIXED %'], tooltip=TT_4)
+typeDeal      = input.string ('Both',            '  Trade Type ',      inline='mas', options=['Both', 'Long', 'Short'])
+maStopType    = input.string ('[1] ALMA',        '  MA Stops  ',       inline='mas', options=['[1] ALMA', '[2] EMA', '[3] HMA', '[4] LRC', '[5] RMA', '[6] SMA', '[7] VWMA', '[8] WMA', '[9] ZLMA'], tooltip=TT_5)
+goTests       = input.string ('Stops',           '  Testing    ',      inline='tes', options=['Stops', 'Pivot Point Example', 'External Example', 'External Signal'])
+backWin       = input.int    (2000,              '   BackWin  ',       inline='tes', tooltip=TT_6)
+
+onofSL1       = input.bool   (true,              '[1]',                inline='onof')
+onofSL2       = input.bool   (true,              '[2]',                inline='onof')
+onofSL3       = input.bool   (true,              '[3]',                inline='onof')
+onofSL4       = input.bool   (true,              '[4]',                inline='onof')
+onofSL5       = input.bool   (true,              '[5]',                inline='onof')
+onofSL6       = input.bool   (true,              '[6]',                inline='onof')
+onofSL7       = input.bool   (true,              '[7]',                inline='onof')
+onofSL8       = input.bool   (true,              '[8]',                inline='onof')
+onofSL9       = input.bool   (true,              '[9]',                inline='onof', tooltip='You can disable any of the Stop Losses from any Auto mode')
+pvtlen        = input.int    (0005,              '  Pivot Length',     inline='ono')
+mstart        = input.string ('OFF',             'Manual Start',       inline='ono', options=['ON', 'OFF'], tooltip=TT_7)
+exsource      = input.source (open,              '  Ex Source  ',      inline='exs')
+opSignal      = input.bool   (true,              'Close on Opposite',  inline='exs', tooltip='● Ex Source ━ Allows you to select an indicator for the test.')
+
+defLens = 'Default Lengths'
+tt0 = '\nIf set to 0, the Default settings are used.'
+tt1 = 'Default: \nMax = 200, Min = 5, Step = 2' + tt0
+tt2 = 'Default: \nMax = 5.0, Min = 0.5, Step = 0.1' + tt0
+tt3 = 'Default: \nMax = 200, Min = 5, Step = 2' + tt0
+tt4 = 'Default: \nMax = 25, Min = 0.25, Step = 0.25' + tt0
+inpLen1_max   = input.float  (0,    'X1  Max',  inline='X1', group=defLens, tooltip=tt1),    uniLen1_max  = inpLen1_max  != 0 ? inpLen1_max  : slTypeI == '[8] SAR' ? 0.1   : 200
+inpLen1_min   = input.float  (0,    '    min',  inline='X1', group=defLens, tooltip=tt1),    uniLen1_min  = inpLen1_min  != 0 ? inpLen1_min  : slTypeI == '[8] SAR' ? 0.001 : 5  
+inpLen1_step  = input.float  (0,    '    step', inline='X1', group=defLens, tooltip=tt1),    uniLen1_step = inpLen1_step != 0 ? inpLen1_step : slTypeI == '[8] SAR' ? 0.005 : 2  
+inpLen2_max   = input.float  (0,    'X2  Max',  inline='X2', group=defLens, tooltip=tt2),    uniLen2_max  = inpLen2_max  != 0 ? inpLen2_max  : slTypeI == '[8] SAR' ? 0.1   : 5.0
+inpLen2_min   = input.float  (0,    '    min',  inline='X2', group=defLens, tooltip=tt2),    uniLen2_min  = inpLen2_min  != 0 ? inpLen2_min  : slTypeI == '[8] SAR' ? 0.001 : 0.5
+inpLen2_step  = input.float  (0,    '    step', inline='X2', group=defLens, tooltip=tt2),    uniLen2_step = inpLen2_step != 0 ? inpLen2_step : slTypeI == '[8] SAR' ? 0.005 : 0.1
+inpLen3_max   = input.float  (0,    'X3  Max',  inline='X3', group=defLens, tooltip=tt3),    uniLen3_max  = inpLen3_max  != 0 ? inpLen3_max  : slTypeI == '[8] SAR' ? 0.2   : 200
+inpLen3_min   = input.float  (0,    '    min',  inline='X3', group=defLens, tooltip=tt3),    uniLen3_min  = inpLen3_min  != 0 ? inpLen3_min  : slTypeI == '[8] SAR' ? 0.01  : 5  
+inpLen3_step  = input.float  (0,    '    step', inline='X3', group=defLens, tooltip=tt3),    uniLen3_step = inpLen3_step != 0 ? inpLen3_step : slTypeI == '[8] SAR' ? 0.005 : 2  
+inpLen4_max   = input.float  (0,    'TP  Max',  inline='TP', group=defLens, tooltip=tt4),    uniLen4_max  = inpLen4_max  != 0 ? inpLen4_max  : 25                                
+inpLen4_min   = input.float  (0,    '    min',  inline='TP', group=defLens, tooltip=tt4),    uniLen4_min  = inpLen4_min  != 0 ? inpLen4_min  : 0.25                              
+inpLen4_step  = input.float  (0,    '    step', inline='TP', group=defLens, tooltip=tt4),    uniLen4_step = inpLen4_step != 0 ? inpLen4_step : 0.25
+
+gOthers = 'Others Settings'
+priceTip      = 'Set Start Point to Manual Start. Then you can move the Point on the graph with the mouse.'
+barTime       = input.time  (0,          'Bar Time',     group=gOthers,  inline='1', confirm=true)
+start         = input.price (0,          'Price',        group=gOthers,  inline='1', confirm=true, tooltip=priceTip)
+commission    = input.float (0.005,      'Сommission',   group=gOthers,  inline=' ', tooltip='Commission in Percent')
+
+source = switch src
+    'open'     => open
+    'high'     => high
+    'low'      => low
+    'close'    => close
+    'ohlc4'    => ohlc4
+    'hlcc4'    => hlcc4
+    'hlc3'     => hlc3
+    'hl2'      => hl2
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+// ———————— Custom Function without limitations(typezation, etc)
+// ———— MA Collection https://www.tradingview.com/script/nOno9UgN-AIO-Multi-Collection-Moving-Averages-140-MA-Types/
+
+EMA(float src, series int length) =>
+    var float sum = na
+    float alpha = 2 / (length + 1)
+    sum := na(sum[1]) ? src : alpha * src + (1 - alpha) * nz(sum[1])
+
+SMA(float src, series int length) =>
+    float a = ta.cum(src)
+    (a - a[math.max(length, 0)]) / math.max(length, 0)
+
+WMA(float src, series int length) =>
+    len = nz(length, 1)
+    cml = ta.cum(src) 
+    sum = ta.change(ta.cum(cml), len) 
+    wma = (len * cml - sum[1]) / (len * (len + 1) /2 )
+
+HMA(float src, series int length) =>
+    float hull = WMA(2 * WMA(src, length / 2) - WMA(src, length), math.round(math.sqrt(length)))
+
+RMA(float src, series int length) =>
+    float alpha = 1 / length
+    float sum = 0.0
+    sum := na(sum[1]) ? SMA(src, length) : alpha * src + (1 - alpha) * nz(sum[1])
+
+VWMA(float src, series int length) =>
+    SMA(src * volume, length) / SMA(volume, length)
+
+ZLEMA(float src, series int length) =>
+    float lag = (length - 1) / 2
+    float emaSrc = src + src - src[lag]
+    float v10 = SMA(emaSrc, length)
+
+ATR(series int length) =>
+    var float atr = 0.0
+    float Tr = math.max(high, close[1]) - math.min(low, close[1])
+    atr := nz(atr[1] + (Tr - atr[1]) / length, Tr)
+
+STDEV(float src, series int length) =>
+    length == 1 ? 0.0 : math.sqrt(SMA(src * src, length) - math.pow(SMA(src, length), 2))
+
+MA(string _maType, series float _maSource, series int _maLength) =>
+    switch _maType
+        '[1] ALMA' => ta.alma   (_maSource, nz(_maLength, 10), 0.85, 6)
+        '[2] EMA'  => EMA       (_maSource, nz(_maLength, 10))
+        '[3] HMA'  => HMA       (_maSource, nz(_maLength, 10))
+        '[4] LRC'  => ta.linreg (_maSource, nz(_maLength, 10), 0)
+        '[5] RMA'  => RMA       (_maSource, nz(_maLength, 10))
+        '[6] SMA'  => SMA       (_maSource, nz(_maLength, 10))
+        '[7] VWMA' => VWMA      (_maSource, nz(_maLength, 10))
+        '[8] WMA'  => WMA       (_maSource, nz(_maLength, 10))
+        '[9] ZLMA' => ZLEMA     (_maSource, nz(_maLength, 10))
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+// ———————— Function for Generation Combinations
+
+randomInt(seed, minValue, maxValue) => // Returns random int value
+    baseValue = math.sin(seed * 1664525 + seed * seed) * 1013904223
+    fracPart = baseValue % 1
+    scaledValue = math.abs(math.floor(fracPart * (maxValue - minValue + 1)) + minValue)
+
+randomFloat(seed, minValue, maxValue) => // Returns random Float value
+    baseValue = math.sin(seed * 1664525 + seed * seed) * 1013904223
+    fracPart = baseValue % 1
+    scaledValue = math.abs(fracPart * (maxValue - minValue + 1)) + minValue
+
+strParse(string src, string txt, int val) => // Returns a string of text and its number in string
+    var string regex = '-?\\d+(\\.\\d+)?' // Find any numbers
+    string out = na
+    resStr = str.match(src, txt + '*.*')
+    resVal = str.match(str.replace(resStr, txt, ''), regex)
+    out := val == 1 ? resStr : resVal
+
+calc_size(float max, float min, float step) => math.floor((max - min) / step) + 1 // Returns preArray Size
+
+arrayRange(size, min, step) => // Returns filled array
+    var arr = array.new_float(size)
+    for i = 0 to size - 1
+        array.set(arr, i, min + i * step)
+    arr
+
+arrayShuffle(arr, seed=1337) => // Returns Shuffle-Randomized array
+    size = array.size(arr)
+    for i = 0 to size - 1
+        rand_index = randomInt(i * seed, 0, size - 2) 
+        temp = array.get(arr, i)
+        array.set(arr, i, array.get(arr, rand_index))
+        array.set(arr, rand_index, temp)
+    arr
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+
+statistics(bool inLong, bool inShort, float SLTPhit) =>
+    // ———————— Get Statistics
+    var float bearCountTrade = 0
+    var float bearEntryPrice = 0.0
+    var float bearExitPrice = 0.0
+    var float bearLossCount = 0.0
+    var float bearLossPnl = 0.0
+    var float bearLossSquaredSum = 0.0 
+    var float bearWinsPnl = 0.0
+    var float bullCountTrade = 0
+    var float bullEntryPrice = 0.0
+    var float bullExitPrice = 0.0
+    var float bullLossCount = 0.0
+    var float bullLossPnl = 0.0
+    var float bullLossSquaredSum = 0.0
+    var float bullWinsPnl = 0.0
+
+    var float TotalWinCount = 0
+    var float TotalTrade = 0
+
+    // Variables to calculate max drawdown
+    var float peakPortfolioValue = 0.0
+    var float totalDrawdown = 0.0
+    var float FinalScore = 0.0
+
+    // Long Trade
+    if inLong and not inLong[1]
+        bullEntryPrice := close
+
+    if inLong[1] and SLTPhit != SLTPhit[1] and bullEntryPrice != 0
+        bullExitPrice := SLTPhit
+        pnl = ((bullExitPrice - bullEntryPrice) / bullEntryPrice) * 100 - ((commission * 2) * 100)
+        bullExitPrice := 0
+
+        // Profit and Loss Update
+        bullWinsPnl := pnl > 0 ? bullWinsPnl + pnl : bullWinsPnl
+        bullLossPnl := pnl < 0 ? bullLossPnl - pnl : bullLossPnl
+        bullLossCount := pnl < 0 ? bullLossCount + 1 : bullLossCount
+        bullLossSquaredSum := bullLossSquaredSum + pnl * pnl
+        bullCountTrade += 1
+
+    // Short Trade
+    if inShort and not inShort[1]
+        bearEntryPrice := close
+
+    if inShort[1] and SLTPhit != SLTPhit[1] and bearEntryPrice != 0
+        bearExitPrice := SLTPhit
+        pnl = ((bearEntryPrice - bearExitPrice) / bearEntryPrice) * 100 - ((commission * 2) * 100)
+        bearExitPrice := 0
+
+        // Profit and Loss Update
+        bearWinsPnl := pnl > 0 ? bearWinsPnl + pnl : bearWinsPnl
+        bearLossPnl := pnl < 0 ? bearLossPnl - pnl : bearLossPnl
+        bearLossCount := pnl < 0 ? bearLossCount + 1 : bearLossCount
+        bearLossSquaredSum := bearLossSquaredSum + pnl * pnl
+        bearCountTrade += 1
+
+    bullTotalProfit = (bullWinsPnl - bullLossPnl)
+    bearTotalProfit = (bearWinsPnl - bearLossPnl)
+    TotalNetProfit = bullTotalProfit + bearTotalProfit
+    peakPortfolioValue := TotalNetProfit > peakPortfolioValue ? TotalNetProfit : peakPortfolioValue // Update peak portfolio value if current value is higher
+    drawdown = peakPortfolioValue - TotalNetProfit // Calculate drawdown
+    totalDrawdown := drawdown > totalDrawdown ? drawdown : totalDrawdown // Update max drawdown if current drawdown is higher
+
+
+    // Total counts
+    if barstate.islastconfirmedhistory
+        bearProfitFactor = bearLossPnl != 0 ? (bearWinsPnl / bearLossPnl) : na
+        bearWinRate = bearCountTrade != 0 ? ((bearCountTrade - bearLossCount) / bearCountTrade) * 100 : na
+        bullProfitFactor = bullLossPnl != 0 ? (bullWinsPnl / bullLossPnl) : na
+        bullWinRate = bullCountTrade != 0 ? ((bullCountTrade - bullLossCount) / bullCountTrade) * 100 : na
+        TotalLossCount = bullLossCount + bearLossCount
+        TotalProfitFactor = bullProfitFactor + bearProfitFactor
+        TotalTrade := bullCountTrade + bearCountTrade
+        TotalWinCount := TotalTrade - TotalLossCount
+        TotalWinRate = TotalTrade != 0 ? (TotalWinCount / TotalTrade) * 100 : na
+
+        // Calculate Sharpe Ratio
+        mean_all = TotalTrade != 0 ? TotalNetProfit / TotalTrade : na
+        stddev_all = TotalTrade != 0 ? math.sqrt((bullLossSquaredSum + bearLossSquaredSum - TotalTrade * mean_all * mean_all) / TotalTrade) : na
+        downside_sum = bearLossSquaredSum + bullLossSquaredSum
+    
+        sharpe_ratio = stddev_all != 0 ? (mean_all / stddev_all) * math.sqrt(255) : na
+        sortino_ratio = downside_sum != 0 ? (mean_all / math.sqrt(downside_sum / (bullLossCount + bearLossCount))) * math.sqrt(255) : na
+        omega_ratio = (bullWinsPnl != 0 and bearLossPnl != 0) ? bullWinsPnl / math.abs(bearLossPnl) : na
+        calmar_ratio = TotalNetProfit / totalDrawdown
+
+        normalizedTotalTrade   = (TotalTrade - 10) / (100 - 10)     // (TotalTrade - minTotalTrade) / (maxTotalTrade - minTotalTrade)
+        normalizedNetProfit    = (TotalNetProfit - 0) / (100 - 0)   // (TotalNetProfit - minTotalNetProfit) / (maxTotalNetProfit - minTotalNetProfit)
+        normalizedWinRate      = (TotalWinRate - 30) / (100 - 30)   // (TotalWinRate - minTotalWinRate) / (maxTotalWinRate - minTotalWinRate)
+        normalizedProfitFactor = (TotalProfitFactor - 1) / (3 - 1)  // (TotalProfitFactor - minTotalProfitFactor) / (maxTotalProfitFactor - minTotalProfitFactor)
+        normalizedDrawdown     = 1 - (totalDrawdown / 75)           // 1 - (totalDrawdown / totalDrawdownThreshold)
+        normalizedSharpeRatio  = (sharpe_ratio - 0) / (1 - 0)       // (sharpe_ratio - minSharpeRatio) / (maxSharpeRatio - minSharpeRatio)
+        normalizedSortinoRatio = (sortino_ratio - 0) / (1 - 0)      // (sortino_ratio - minSortinoRatio) / (maxSortinoRatio - minSortinoRatio)
+        normalizedOmegaratio   = (omega_ratio - 0) / (1 - 0)        // (omega_ratio - minOmegaratio) / (maxOmegaratio - minOmegaratio)
+        normalizedCalmarRatio  = (calmar_ratio - 0) / (1 - 0)       // (calmar_ratio - minCalmarRatio) / (maxCalmarRatio - minCalmarRatio)
+
+        // Weight combinations
+        iterations = 15
+        var scoresArray = array.new_float(iterations)
+        var Wcomb = array.from(0.03, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2, 0.22, 0.24, 0.26, 0.28, 0.3, 0.32, 0.34, 0.36, 0.38, 0.4, 0.42, 0.44, 0.46, 0.48, 0.5)
+
+        for i = 0 to iterations - 1
+            Wcomb := arrayShuffle(Wcomb, i) // Shuffle weights
+            score = 
+                 + normalizedTotalTrade   * array.get(Wcomb, 0)
+                 + normalizedNetProfit    * array.get(Wcomb, 1)
+                 + normalizedWinRate      * array.get(Wcomb, 2)
+                 + normalizedProfitFactor * array.get(Wcomb, 3)
+                 + normalizedDrawdown     * array.get(Wcomb, 4)
+                 + normalizedSharpeRatio  * array.get(Wcomb, 5)
+                 + normalizedSortinoRatio * array.get(Wcomb, 6)
+                 + normalizedOmegaratio   * array.get(Wcomb, 7)
+                 + normalizedCalmarRatio  * array.get(Wcomb, 8)
+            array.set(scoresArray, i, score / 9)
+
+        FinalScore := math.round(array.avg(scoresArray) * 0.6 + array.median(scoresArray) * 0.4, 3) * 100
+    
+        string statsOut = ''
+        statsOut := statsOut
+         + 'Total Trade: '         + str.tostring(TotalTrade        - (typeDeal=='Long' ? bearCountTrade   : typeDeal=='Short' ? bullCountTrade   : 0) ) + '\n'
+         + 'Total Net Profit: '    + str.tostring(TotalNetProfit    - (typeDeal=='Long' ? bearTotalProfit  : typeDeal=='Short' ? bullTotalProfit  : 0) ) + '\n'
+         + 'Total Score: '         + str.tostring(FinalScore        - (typeDeal=='Long' ? 0                : typeDeal=='Short' ? 0                : 0) ) + '\n'
+         + 'Total Win Rate: '      + str.tostring(TotalWinRate      - (typeDeal=='Long' ? bearWinRate      : typeDeal=='Short' ? bullWinRate      : 0) ) + '\n'
+         + 'Total Profit Factor: ' + str.tostring(TotalProfitFactor - (typeDeal=='Long' ? bearProfitFactor : typeDeal=='Short' ? bullProfitFactor : 0) ) + '\n'
+         + 'Total Max Drawdown: '  + str.tostring(totalDrawdown     - (typeDeal=='Long' ? 0                : typeDeal=='Short' ? 0                : 0) ) + '\n'
+        statsOut
+
+slType(float src, string typelist) =>
+    if typelist == 'stop'
+        switch src
+            1 => '[1] 𝗦.ᴠᴏʟᴀᴛʏ'
+            2 => '[2] Trailing'
+            3 => '[3] Fast Trail'
+            4 => '[4] Volatility'
+            5 => '[5] Chandelier'
+            6 => '[6] Activator'
+            7 => '[7] MA'
+            8 => '[8] SAR'
+            => na
+    else if typelist == 'ma'
+        switch src
+            1 => '[1] ALMA'
+            2 => '[2] EMA'
+            3 => '[3] HMA'
+            4 => '[4] LRC'
+            5 => '[5] RMA'
+            6 => '[6] SMA'
+            7 => '[7] VWMA'
+            8 => '[8] WMA'
+            9 => '[9] ZLMA'
+            => na
+    else
+        ''
+
+VOLATY(string TAKE, string STOP, float fixed, float period, float multiplier) =>
+    float ATR = ATR(int(period)) * multiplier
+    float STDEV = STDEV(close, int(period)) * multiplier
+
+    float take = TAKE == "ATR" ? ATR : TAKE == "STDEV" ? ATR : close * (fixed / 100)
+    float stop = STOP == "ATR" ? ATR : STOP == "STDEV" ? ATR : close * (fixed / 100)
+
+    [take, stop]
+
+
+// Your Function to Backtest Example (External Stop)
+// You can test up to 3 lengths of any of your functions.
+// In this mode, entry is made at the market and will be closed Only on a new Long or Short signal.
+if goTests=='External Example' // Determine the lengths you will be testing in advance.
+    uniLen1_max  := 9  
+    uniLen1_min  := 1  
+    uniLen1_step := 1  
+    uniLen2_max  := 200
+    uniLen2_min  := 2  
+    uniLen2_step := 1  
+    uniLen3_max  := 200
+    uniLen3_min  := 2  
+    uniLen3_step := 1  
+
+YourFunction(int len1, int len2, int len3) => // Example MA Crosses
+    MA1  = MA(slType(len1, 'ma'), close, len2)
+    MA2  = MA(slType(len1, 'ma'), close, len3)
+    buy  = ta.crossunder(MA1, MA2)
+    sell = ta.crossover(MA1, MA2)
+    [buy, sell]
+
+YourFunction1(int len1, int len2, int len3) => // Example MACD (Moving Average Convergence/Divergence)
+    MACD  = EMA(close, len1) - EMA(close, len2)
+    aMACD = EMA(MACD, len3)
+    delta = MACD - aMACD
+    buy   = ta.crossover(delta, 0)
+    sell  = ta.crossunder(delta, 0)
+    [buy, sell]
+
+YourFunction2(int len1, int len2, int len3) => // Example RSI
+    rsi  = ta.rsi(close, len1)
+    OS   = len2   // overSold
+    OB   = len3   // overBought
+    buy  = not na(rsi) and ta.crossover(rsi, OS)
+    sell = not na(rsi) and ta.crossunder(rsi, OB)
+    [buy, sell]
+
+// ————————
+
+var int testWindow = na
+testWindow := last_bar_index - bar_index <= backWin and na(testWindow) or last_bar_index <= backWin ? bar_index : testWindow
+
+stop(series string strOpt) =>
+    var array<string> split = str.split(strOpt, ',')
+    var float arrSize = split.size()
+    var float x1_Len  = arrSize > 0 ? str.tonumber(array.get(split, 0)) : 2    // Period    // SAR start
+    var float x2_Len  = arrSize > 1 ? str.tonumber(array.get(split, 1)) : 2    // Factor    // SAR inc
+    var float x3_Len  = arrSize > 2 ? str.tonumber(array.get(split, 2)) : 2    // MA Len    // SAR max
+    var float stopNum = arrSize > 3 ? str.tonumber(array.get(split, 3)) : 1
+    var float tp_Len  = arrSize > 4 ? str.tonumber(array.get(split, 4)) : 1
+    var bool showStop = array.includes(split, 'showStop')
+    var string slType = switch slTypeI
+        'Auto' => slType(stopNum, 'stop')
+        'Auto MA' => '[7] MA'
+        => slTypeI
+    
+    [tvolaty, volaty] = VOLATY(tvolatyType, volatyType, tp_Len, x1_Len, x2_Len)
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+    // ———————— Trade variables
+    var bool  inLong  = false
+    var bool  inShort = false
+    var bool  inTrade = false
+    var bool  goTrade = false
+    var float tpPrice = na
+    var float slPrice = na
+    var float SLTPhit = na
+    goLong  = false
+    goShort = false
+
+    switch goTests
+        'Stops' => // Cyclical Trailing Stop Losses like a SuperTrend
+            goLong  := bar_index[1] == testWindow or last_bar_index <= backWin and bar_index[1] == math.max(x1_Len, x2_Len, x3_Len, 10)
+            goShort := bar_index[2] == testWindow or last_bar_index <= backWin and bar_index[2] == math.max(x1_Len, x2_Len, x3_Len, 10)
+            goLong  := inShort[2] and not inTrade[1] ? true : goLong 
+            goShort := inLong [2] and not inTrade[1] ? true : goShort
+
+        'Pivot Point Example' => // Example of using built-in signals & Stops
+            pivotH   = ta.pivothigh(high, pvtlen, pvtlen),  pivotHc = ta.pivothigh(close, pvtlen, pvtlen)
+            pivotL   = ta.pivotlow (low,  pvtlen, pvtlen),  pivotLc = ta.pivotlow (close, pvtlen, pvtlen)
+            newpvtH  = na(pivotH[1]) and not na(pivotH) or (na(pivotHc[1]) and not na(pivotHc)) and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
+            newpvtL  = na(pivotL[1]) and not na(pivotL) or (na(pivotLc[1]) and not na(pivotLc)) and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
+
+            goLong  := newpvtL and not inTrade and not inLong [pvtlen*10]
+            goShort := newpvtH and not inTrade and not inShort[pvtlen*10]
+
+        'External Example' => // Example of using built-in signals & Lengths
+            [buy, sell] = YourFunction(int(x1_Len), int(x2_Len), int(x3_Len))
+            goLong  := buy  and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
+            goShort := sell and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
+            goLong  := not inTrade[1] and goLong  [1] ? true : goLong 
+            goShort := not inTrade[1] and goShort [1] ? true : goShort
+
+        'External Signal' => // Example of using External signals
+            closeop = true
+            goLong  := exsource == +1 and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
+            goShort := exsource == -1 and testWindow >= math.max(x1_Len, x2_Len, x3_Len, 10)
+            goLong  := closeop and inShort and exsource == +1 ? true : goLong 
+            goShort := closeop and inLong  and exsource == -1 ? true : goShort
+
+    if mstart=='ON'
+        timeStart = time_close[1] <= barTime and time >= barTime
+        goLong   := showStop ? false : goLong 
+        goShort  := showStop ? false : goShort
+        goLong   := timeStart and start < close ? true : goLong 
+        goShort  := timeStart and start > close ? true : goShort
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+    // ———————— TPSL's Manage
+    oppSignal = opSignal ? (inLong and goShort) or (inShort and goLong) : false
+    goLong   := inTrade and not oppSignal ? false : goLong 
+    goShort  := inTrade and not oppSignal ? false : goShort
+
+    stoptakeL = inLong  and ((low  <= slPrice) or (not na(tpPrice) and high >= tpPrice))
+    stoptakeS = inShort and ((high >= slPrice) or (not na(tpPrice) and low  <= tpPrice))
+    slNonEntr = ((slTypeI=='None' and inLong and goLong)) or ((slTypeI=='None' and inShort and goShort))
+
+    if inLong  and not goLong  and (stoptakeL or oppSignal or slNonEntr)
+        inLong  := false
+        inTrade := false
+        SLTPhit := slTypeI!='None' and (low <= slPrice) ? slPrice : not na(tpPrice) and high >= tpPrice ? tpPrice : close
+
+    if inShort and not goShort and (stoptakeS or oppSignal or slNonEntr)
+        inShort := false
+        inTrade := false
+        SLTPhit := slTypeI!='None' and (high >= slPrice) ? slPrice : not na(tpPrice) and low <= tpPrice ? tpPrice : close
+
+    goTrade := (goLong or goShort)
+
+    // —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+    // ———————————————— Сreating and working on Take Profit and Stop Loss
+    // ———————— Stops
+
+    switch slType
+        'None'         => 
+            slPrice := goTrade ? close : slPrice
+
+        '[1] S.ᴠᴏʟᴀᴛʏ' =>       // ———————— Static Stop
+            slPrice := goLong ? source - volaty  : goShort ? source + volaty  : slPrice
+
+        '[2] Trailing' =>       // ———————— Trailing Stop
+            StopL    = source - volaty
+            StopS    = source + volaty
+            StopL   := goLong  or inLong  ? math.max(source - volaty, StopL[1]) : StopL
+            StopS   := goShort or inShort ? math.min(source + volaty, StopS[1]) : StopS
+            slPrice := goLong  or inLong  ? StopL : goShort or inShort ? StopS : na
+
+        '[3] Fast Trail' =>     // ———————— Fast Trailing Stop
+            var float StopL = na, StopL := goLong  ? source - volaty : StopL
+            var float StopS = na, StopS := goShort ? source + volaty : StopS
+            StopL   := (goLong  or inLong ) and high > high[1] ? math.max(StopL + (ohlc4 - ohlc4[1]), StopL) : StopL
+            StopS   := (goShort or inShort) and low  < low [1] ? math.min(StopS + (ohlc4 - ohlc4[1]), StopS) : StopS
+            slPrice := goLong or inLong ? StopL : goShort or inShort ? StopS : na
+
+        '[4] Volatility' =>     // ———————— Volaty Stop
+            var float stopL = na
+            var float stopS = na
+            stopL   := goLong  ? (source - volaty) : inLong  ? math.max(nz(stopL, source), source) : stopL
+            stopS   := goShort ? (source + volaty) : inShort ? math.min(nz(stopS, source), source) : stopS
+            slPrice := goLong  ? (source - volaty) : inLong  ? math.max(stopL - volaty, nz(slPrice[1])) :
+                       goShort ? (source + volaty) : inShort ? math.min(stopS + volaty, nz(slPrice[1])) : na
+
+        '[5] Chandelier' =>     // ———————— Chandelier Stop
+            var float StopL = na
+            var float StopS = na
+            StopL   := goLong  or (inLong  and high > StopL) ? high : StopL
+            StopS   := goShort or (inShort and low  < StopS) ? low  : StopS
+            slPrice := goLong  ? high - volaty : inLong  ? math.max(StopL - volaty, nz(slPrice[1])) : 
+                       goShort ? low  + volaty : inShort ? math.min(StopS + volaty, nz(slPrice[1], +1.0e10)) : na
+
+        '[6] Activator' =>       // ———————— Activator Stop // Credit @alexgrover
+            stop     = 0.0, bars = ta.barssince(goTrade)
+            val      = ta.valuewhen(goTrade, (volaty/x2_Len) / x1_Len, 0)
+            stop    := goLong  ? source - volaty : goShort ? source + volaty : nz(stop[1], close) + math.sign(close - nz(stop[1], close[1])) * val * bars
+            slPrice := goTrade or inTrade ? stop : na
+
+        '[7] MA' =>             // ———————— MA's Stops
+            MAType   = slType == 'Auto MA' ? slType(stopNum, 'ma') : maStopType
+            MA       = MA(MAType, close, int(x3_Len))
+            stop     = goLong  ? source - volaty : goShort ? source + volaty : MA
+            stop    := goLong  or goShort ? stop : stop[1] + (math.sign(close[1] - stop[1])) * math.abs(MA - MA[1])
+            slPrice := goTrade or inTrade ? stop : na
+
+        '[8] SAR' =>            // ———————— SAR Stop
+            var float stop = na, var float maxMin = na, var float accel = na
+            maxMin  := goLong  ? high : goShort ? low : maxMin
+            slPrice := slPrice + accel * (maxMin - slPrice)
+            slPrice := goLong  ? math.min(low[1], maxMin) : goShort ? math.max(high[1], maxMin) : slPrice
+            accel   := goTrade ? x1_Len : accel
+            accel   := goTrade ? accel  : inLong and high > maxMin or inShort and low < maxMin ? math.min(accel + x2_Len, x3_Len) : accel
+            maxMin  := inLong and high > maxMin ? high : (inShort and low < maxMin ? low : maxMin)
+            slPrice := goLong or inLong ? math.min(slPrice, low[2]) : goShort or inShort ? math.max(slPrice, high[2]) : slPrice
+        
+    slPrice := goLong and slPrice > low and slPrice < high ? low : goShort and slPrice > low and slPrice < high ? high : slPrice // Fix for when source+stop can be calculated inside candle
+    
+    // ———————— Takes
+    entry = goTrade ? close : na
+    if tpTypeI == 'R:R'
+        riskReward = tp_Len
+        tpPrice := goLong ? entry + (entry - slPrice) * riskReward : goShort ? entry - (slPrice - entry) * riskReward : tpPrice
+    if tpTypeI == 'T.ᴠᴏʟᴀᴛʏ'
+        tp_Len := 1
+        tpPrice := goLong ? entry + tvolaty : goShort ? entry - tvolaty : tpPrice
+    
+    // ————————————————
+    // ———————— Manage Position
+    inLong  := goLong  and not inTrade ? true : inLong
+    inShort := goShort and not inTrade ? true : inShort
+    inTrade := inLong or inShort
+
+    // ———————— Get Statistics
+    string statsOut = statistics(inLong, inShort, SLTPhit)
+    if barstate.islastconfirmedhistory
+        statsOut := statsOut
+         + 'SL Type: ' + str.tostring(stopNum) + '\n'
+         + 'x1_Len: '  + str.tostring(x1_Len)  + '\n'
+         + 'x2_Len: '  + str.tostring(x2_Len)  + '\n'
+         + 'x3_Len: '  + str.tostring(x3_Len)  + '\n'
+         + 'tp_Len: '  + str.tostring(tp_Len)  + '\n'
+
+    if showStop
+        statsOut := statsOut 
+         + 'inLong: '  + str.tostring(inLong)  + '\n'
+         + 'inShort: ' + str.tostring(inShort) + '\n'
+         + 'tpPrice: ' + str.tostring(tpPrice) + '\n'
+         + 'slPrice: ' + str.tostring(slPrice) + '\n'
+         + 'SLTPhit:' + str.tostring(SLTPhit) + '\n'
+    statsOut
+
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+// ———————————————— Generation Combinations
+// ———————— Initialization Arrays & Calculate
+var defSumInput = array.from(inpLen1_max,inpLen1_min,inpLen1_step,inpLen2_max,inpLen2_min,inpLen2_step,inpLen3_max,inpLen3_min,inpLen3_step,inpLen4_max,inpLen4_min,inpLen4_step)
+var int sizePart = 300
+var array<string> nums = array.new_string(sizePart)
+var array<string> allstop = array.new_string(sizePart)
+var int x1_size = calc_size(uniLen1_max, uniLen1_min, uniLen1_step)
+var int x2_size = calc_size(uniLen2_max, uniLen2_min, uniLen2_step)
+var int x3_size = calc_size(uniLen3_max, uniLen3_min, uniLen3_step)
+var int tp_size = calc_size(uniLen4_max, uniLen4_min, uniLen4_step)
+var array<float> primes = arrayShuffle(arrayRange(10000, 0, 1))
+var array<float> x1 = arrayShuffle(arrayRange(x1_size, uniLen1_min, uniLen1_step))
+var array<float> x2 = arrayShuffle(arrayRange(x2_size, uniLen2_min, uniLen2_step))
+var array<float> x3 = arrayShuffle(arrayRange(x3_size, uniLen3_min, uniLen3_step))
+var array<float> TP = arrayShuffle(arrayRange(tp_size, uniLen4_min, uniLen4_step))
+var array<float> SL = array.new_float()
+var int SLcount = 0
+
+// ——————— Disabling any stop loss from generation
+if barstate.isfirst // leave na for the skip in the cycle
+    array.push(SL, onofSL1 ? 1 : na)
+    array.push(SL, onofSL2 ? 2 : na)
+    array.push(SL, onofSL3 ? 3 : na)
+    array.push(SL, onofSL4 ? 4 : na)
+    array.push(SL, onofSL5 ? 5 : na)
+    array.push(SL, onofSL6 ? 6 : na)
+    array.push(SL, onofSL7 ? 7 : na)
+    array.push(SL, onofSL8 ? 8 : na)
+    array.push(SL, onofSL9 ? 9 : na)
+    arrayShuffle(SL)
+    for i = 0 to array.size(SL) - 1
+        SLcount := na(array.get(SL, i)) ? SLcount : SLcount + 1
+
+var int maxCombination = switch slTypeI
+    'Auto'       => x1_size * x2_size * x3_size * SLcount
+    'Auto MA'    => x1_size * x2_size * x3_size * SLcount
+    '[7] MA'     => x1_size * x2_size * x3_size
+    '[8] SAR'    => x1_size * x2_size * x3_size
+    => x1_size * x2_size * (slTypeI=='None' and goTests=='External Stop' ? x3_size : 1)
+maxCombination := tpTypeI != 'None' ? maxCombination * tp_size : maxCombination
+var int totalPart = math.floor((maxCombination - 1) / sizePart) + 1
+var int startIndex = math.min(math.min(portion, totalPart) * sizePart, maxCombination - 1)
+var int endIndex = math.min(startIndex + sizePart, maxCombination)
+var array<string> maxCombo = array.new_string(maxCombination > 10000 ? na : maxCombination)
+
+// ——————— Optimized Filled Parts
+// - For ≤10,000 combinations: it iterates Linearly, formats the combination values (x1, x2, x3, stop type, TP),
+//   shuffles the full list, and then fills a slice into the `nums` array.
+// - For >10,000 combinations: it initially Randomly selects combination values using a primes-based offset.
+//   The first 10% of combinations are guaranteed not to have duplicates and Full Randomized
+if barstate.isfirst
+    if maxCombination <= 10000 // Linear filling and then shuffle
+        for i = 0 to maxCombination - 1
+            float x1_Len = array.get(x1, i % x1_size)
+            float x2_Len = array.get(x2, (i / x1_size) % x2_size)
+            float x3_Len = array.get(x3, (i / (x1_size * x2_size)) % x3_size)
+            float tp_Len = array.get(TP, (i / (x1_size * x2_size * x3_size)) % tp_size)
+            float slType = str.tonumber(strParse(slTypeI, '_', 0))
+            string value = str.format('{0},{1},{2},{3},{4}', x1_Len, x2_Len, x3_Len, slType, tp_Len)
+            array.set(maxCombo, i, value)
+        maxCombo := arrayShuffle(maxCombo)
+
+        for i = startIndex to endIndex - 1
+            value = array.get(maxCombo, i)
+            array.set(nums, i - startIndex, value)
+
+    if maxCombination > 10000 // Randomly filling initialy
+        for i = startIndex to endIndex - 1
+            float x1_Len = array.get(x1, int(i + array.get(primes, (portion + 1) % totalPart)) % array.size(x1))
+            float x2_Len = array.get(x2, int(i + array.get(primes, (portion + 2) % totalPart)) % array.size(x2))
+            float x3_Len = array.get(x3, int(i + array.get(primes, (portion + 3) % totalPart)) % array.size(x3))
+            float tp_Len = array.get(TP, int(i + array.get(primes, (portion + 4) % totalPart)) % array.size(TP))
+            float slType = array.get(SL, int(i + array.get(primes, (portion + 5) % totalPart)) % array.size(SL))
+            string stop_ = str.contains(slTypeI, 'Auto') ? str.tostring(slType) : strParse(slTypeI, '_', 0)
+            string value = str.format('{0},{1},{2},{3},{4}', x1_Len, x2_Len, x3_Len, stop_, tp_Len)
+            if na(slType) // Skip disabled stop
+                continue
+            array.set(nums, i - startIndex, value)
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+// ———————— Calls for Stop Functions
+// You can Bypassing a compiler limitation with a create simple function. 
+// If you will be using heavy functions, reduce the sizePart and the amount of array.set and stop() calls. You can increase it if the functions are easy.
+// Error without bypass - 'The main script is too long'    # frequent stop() calls increase the error rate, potentially causing temporary blocking.
+allstop.set(0  , stop(nums.get(0  ))),    allstop.set(125, stop(nums.get(125))),    //allstop.set(250, stop(nums.get(250))),    //allstop.set(375, stop(nums.get(375)))
+allstop.set(1  , stop(nums.get(1  ))),    allstop.set(126, stop(nums.get(126))),    //allstop.set(251, stop(nums.get(251))),    //allstop.set(376, stop(nums.get(376)))
+allstop.set(2  , stop(nums.get(2  ))),    allstop.set(127, stop(nums.get(127))),    //allstop.set(252, stop(nums.get(252))),    //allstop.set(377, stop(nums.get(377)))
+allstop.set(3  , stop(nums.get(3  ))),    allstop.set(128, stop(nums.get(128))),    //allstop.set(253, stop(nums.get(253))),    //allstop.set(378, stop(nums.get(378)))
+allstop.set(4  , stop(nums.get(4  ))),    allstop.set(129, stop(nums.get(129))),    //allstop.set(254, stop(nums.get(254))),    //allstop.set(379, stop(nums.get(379)))
+allstop.set(5  , stop(nums.get(5  ))),    allstop.set(130, stop(nums.get(130))),    //allstop.set(255, stop(nums.get(255))),    //allstop.set(380, stop(nums.get(380)))
+allstop.set(6  , stop(nums.get(6  ))),    allstop.set(131, stop(nums.get(131))),    //allstop.set(256, stop(nums.get(256))),    //allstop.set(381, stop(nums.get(381)))
+allstop.set(7  , stop(nums.get(7  ))),    allstop.set(132, stop(nums.get(132))),    //allstop.set(257, stop(nums.get(257))),    //allstop.set(382, stop(nums.get(382)))
+allstop.set(8  , stop(nums.get(8  ))),    allstop.set(133, stop(nums.get(133))),    //allstop.set(258, stop(nums.get(258))),    //allstop.set(383, stop(nums.get(383)))
+allstop.set(9  , stop(nums.get(9  ))),    allstop.set(134, stop(nums.get(134))),    //allstop.set(259, stop(nums.get(259))),    //allstop.set(384, stop(nums.get(384)))
+allstop.set(10 , stop(nums.get(10 ))),    allstop.set(135, stop(nums.get(135))),    //allstop.set(260, stop(nums.get(260))),    //allstop.set(385, stop(nums.get(385)))
+allstop.set(11 , stop(nums.get(11 ))),    allstop.set(136, stop(nums.get(136))),    //allstop.set(261, stop(nums.get(261))),    //allstop.set(386, stop(nums.get(386)))
+allstop.set(12 , stop(nums.get(12 ))),    allstop.set(137, stop(nums.get(137))),    //allstop.set(262, stop(nums.get(262))),    //allstop.set(387, stop(nums.get(387)))
+allstop.set(13 , stop(nums.get(13 ))),    allstop.set(138, stop(nums.get(138))),    //allstop.set(263, stop(nums.get(263))),    //allstop.set(388, stop(nums.get(388)))
+allstop.set(14 , stop(nums.get(14 ))),    allstop.set(139, stop(nums.get(139))),    //allstop.set(264, stop(nums.get(264))),    //allstop.set(389, stop(nums.get(389)))
+allstop.set(15 , stop(nums.get(15 ))),    allstop.set(140, stop(nums.get(140))),    //allstop.set(265, stop(nums.get(265))),    //allstop.set(390, stop(nums.get(390)))
+allstop.set(16 , stop(nums.get(16 ))),    allstop.set(141, stop(nums.get(141))),    //allstop.set(266, stop(nums.get(266))),    //allstop.set(391, stop(nums.get(391)))
+allstop.set(17 , stop(nums.get(17 ))),    allstop.set(142, stop(nums.get(142))),    //allstop.set(267, stop(nums.get(267))),    //allstop.set(392, stop(nums.get(392)))
+allstop.set(18 , stop(nums.get(18 ))),    allstop.set(143, stop(nums.get(143))),    //allstop.set(268, stop(nums.get(268))),    //allstop.set(393, stop(nums.get(393)))
+allstop.set(19 , stop(nums.get(19 ))),    allstop.set(144, stop(nums.get(144))),    //allstop.set(269, stop(nums.get(269))),    //allstop.set(394, stop(nums.get(394)))
+allstop.set(20 , stop(nums.get(20 ))),    allstop.set(145, stop(nums.get(145))),    //allstop.set(270, stop(nums.get(270))),    //allstop.set(395, stop(nums.get(395)))
+allstop.set(21 , stop(nums.get(21 ))),    allstop.set(146, stop(nums.get(146))),    //allstop.set(271, stop(nums.get(271))),    //allstop.set(396, stop(nums.get(396)))
+allstop.set(22 , stop(nums.get(22 ))),    allstop.set(147, stop(nums.get(147))),    //allstop.set(272, stop(nums.get(272))),    //allstop.set(397, stop(nums.get(397)))
+allstop.set(23 , stop(nums.get(23 ))),    allstop.set(148, stop(nums.get(148))),    //allstop.set(273, stop(nums.get(273))),    //allstop.set(398, stop(nums.get(398)))
+allstop.set(24 , stop(nums.get(24 ))),    allstop.set(149, stop(nums.get(149))),    //allstop.set(274, stop(nums.get(274))),    //allstop.set(399, stop(nums.get(399)))
+allstop.set(25 , stop(nums.get(25 ))),    allstop.set(150, stop(nums.get(150))),    //allstop.set(275, stop(nums.get(275))),    //allstop.set(400, stop(nums.get(400)))
+allstop.set(26 , stop(nums.get(26 ))),    allstop.set(151, stop(nums.get(151))),    //allstop.set(276, stop(nums.get(276))),    //allstop.set(401, stop(nums.get(401)))
+allstop.set(27 , stop(nums.get(27 ))),    allstop.set(152, stop(nums.get(152))),    //allstop.set(277, stop(nums.get(277))),    //allstop.set(402, stop(nums.get(402)))
+allstop.set(28 , stop(nums.get(28 ))),    allstop.set(153, stop(nums.get(153))),    //allstop.set(278, stop(nums.get(278))),    //allstop.set(403, stop(nums.get(403)))
+allstop.set(29 , stop(nums.get(29 ))),    allstop.set(154, stop(nums.get(154))),    //allstop.set(279, stop(nums.get(279))),    //allstop.set(404, stop(nums.get(404)))
+allstop.set(30 , stop(nums.get(30 ))),    allstop.set(155, stop(nums.get(155))),    //allstop.set(280, stop(nums.get(280))),    //allstop.set(405, stop(nums.get(405)))
+allstop.set(31 , stop(nums.get(31 ))),    allstop.set(156, stop(nums.get(156))),    //allstop.set(281, stop(nums.get(281))),    //allstop.set(406, stop(nums.get(406)))
+allstop.set(32 , stop(nums.get(32 ))),    allstop.set(157, stop(nums.get(157))),    //allstop.set(282, stop(nums.get(282))),    //allstop.set(407, stop(nums.get(407)))
+allstop.set(33 , stop(nums.get(33 ))),    allstop.set(158, stop(nums.get(158))),    //allstop.set(283, stop(nums.get(283))),    //allstop.set(408, stop(nums.get(408)))
+allstop.set(34 , stop(nums.get(34 ))),    allstop.set(159, stop(nums.get(159))),    //allstop.set(284, stop(nums.get(284))),    //allstop.set(409, stop(nums.get(409)))
+allstop.set(35 , stop(nums.get(35 ))),    allstop.set(160, stop(nums.get(160))),    //allstop.set(285, stop(nums.get(285))),    //allstop.set(410, stop(nums.get(410)))
+allstop.set(36 , stop(nums.get(36 ))),    allstop.set(161, stop(nums.get(161))),    //allstop.set(286, stop(nums.get(286))),    //allstop.set(411, stop(nums.get(411)))
+allstop.set(37 , stop(nums.get(37 ))),    allstop.set(162, stop(nums.get(162))),    //allstop.set(287, stop(nums.get(287))),    //allstop.set(412, stop(nums.get(412)))
+allstop.set(38 , stop(nums.get(38 ))),    allstop.set(163, stop(nums.get(163))),    //allstop.set(288, stop(nums.get(288))),    //allstop.set(413, stop(nums.get(413)))
+allstop.set(39 , stop(nums.get(39 ))),    allstop.set(164, stop(nums.get(164))),    //allstop.set(289, stop(nums.get(289))),    //allstop.set(414, stop(nums.get(414)))
+allstop.set(40 , stop(nums.get(40 ))),    allstop.set(165, stop(nums.get(165))),    //allstop.set(290, stop(nums.get(290))),    //allstop.set(415, stop(nums.get(415)))
+allstop.set(41 , stop(nums.get(41 ))),    allstop.set(166, stop(nums.get(166))),    //allstop.set(291, stop(nums.get(291))),    //allstop.set(416, stop(nums.get(416)))
+allstop.set(42 , stop(nums.get(42 ))),    allstop.set(167, stop(nums.get(167))),    //allstop.set(292, stop(nums.get(292))),    //allstop.set(417, stop(nums.get(417)))
+allstop.set(43 , stop(nums.get(43 ))),    allstop.set(168, stop(nums.get(168))),    //allstop.set(293, stop(nums.get(293))),    //allstop.set(418, stop(nums.get(418)))
+allstop.set(44 , stop(nums.get(44 ))),    allstop.set(169, stop(nums.get(169))),    //allstop.set(294, stop(nums.get(294))),    //allstop.set(419, stop(nums.get(419)))
+allstop.set(45 , stop(nums.get(45 ))),    allstop.set(170, stop(nums.get(170))),    //allstop.set(295, stop(nums.get(295))),    //allstop.set(420, stop(nums.get(420)))
+allstop.set(46 , stop(nums.get(46 ))),    allstop.set(171, stop(nums.get(171))),    //allstop.set(296, stop(nums.get(296))),    //allstop.set(421, stop(nums.get(421)))
+allstop.set(47 , stop(nums.get(47 ))),    allstop.set(172, stop(nums.get(172))),    //allstop.set(297, stop(nums.get(297))),    //allstop.set(422, stop(nums.get(422)))
+allstop.set(48 , stop(nums.get(48 ))),    allstop.set(173, stop(nums.get(173))),    //allstop.set(298, stop(nums.get(298))),    //allstop.set(423, stop(nums.get(423)))
+allstop.set(49 , stop(nums.get(49 ))),    allstop.set(174, stop(nums.get(174))),    //allstop.set(299, stop(nums.get(299))),    //allstop.set(424, stop(nums.get(424)))
+allstop.set(50 , stop(nums.get(50 ))),    allstop.set(175, stop(nums.get(175))),    //allstop.set(300, stop(nums.get(300))),    //allstop.set(425, stop(nums.get(425)))
+allstop.set(51 , stop(nums.get(51 ))),    allstop.set(176, stop(nums.get(176))),    //allstop.set(301, stop(nums.get(301))),    //allstop.set(426, stop(nums.get(426)))
+allstop.set(52 , stop(nums.get(52 ))),    allstop.set(177, stop(nums.get(177))),    //allstop.set(302, stop(nums.get(302))),    //allstop.set(427, stop(nums.get(427)))
+allstop.set(53 , stop(nums.get(53 ))),    allstop.set(178, stop(nums.get(178))),    //allstop.set(303, stop(nums.get(303))),    //allstop.set(428, stop(nums.get(428)))
+allstop.set(54 , stop(nums.get(54 ))),    allstop.set(179, stop(nums.get(179))),    //allstop.set(304, stop(nums.get(304))),    //allstop.set(429, stop(nums.get(429)))
+allstop.set(55 , stop(nums.get(55 ))),    allstop.set(180, stop(nums.get(180))),    //allstop.set(305, stop(nums.get(305))),    //allstop.set(430, stop(nums.get(430)))
+allstop.set(56 , stop(nums.get(56 ))),    allstop.set(181, stop(nums.get(181))),    //allstop.set(306, stop(nums.get(306))),    //allstop.set(431, stop(nums.get(431)))
+allstop.set(57 , stop(nums.get(57 ))),    allstop.set(182, stop(nums.get(182))),    //allstop.set(307, stop(nums.get(307))),    //allstop.set(432, stop(nums.get(432)))
+allstop.set(58 , stop(nums.get(58 ))),    allstop.set(183, stop(nums.get(183))),    //allstop.set(308, stop(nums.get(308))),    //allstop.set(433, stop(nums.get(433)))
+allstop.set(59 , stop(nums.get(59 ))),    allstop.set(184, stop(nums.get(184))),    //allstop.set(309, stop(nums.get(309))),    //allstop.set(434, stop(nums.get(434)))
+allstop.set(60 , stop(nums.get(60 ))),    allstop.set(185, stop(nums.get(185))),    //allstop.set(310, stop(nums.get(310))),    //allstop.set(435, stop(nums.get(435)))
+allstop.set(61 , stop(nums.get(61 ))),    allstop.set(186, stop(nums.get(186))),    //allstop.set(311, stop(nums.get(311))),    //allstop.set(436, stop(nums.get(436)))
+allstop.set(62 , stop(nums.get(62 ))),    allstop.set(187, stop(nums.get(187))),    //allstop.set(312, stop(nums.get(312))),    //allstop.set(437, stop(nums.get(437)))
+allstop.set(63 , stop(nums.get(63 ))),    allstop.set(188, stop(nums.get(188))),    //allstop.set(313, stop(nums.get(313))),    //allstop.set(438, stop(nums.get(438)))
+allstop.set(64 , stop(nums.get(64 ))),    allstop.set(189, stop(nums.get(189))),    //allstop.set(314, stop(nums.get(314))),    //allstop.set(439, stop(nums.get(439)))
+allstop.set(65 , stop(nums.get(65 ))),    allstop.set(190, stop(nums.get(190))),    //allstop.set(315, stop(nums.get(315))),    //allstop.set(440, stop(nums.get(440)))
+allstop.set(66 , stop(nums.get(66 ))),    allstop.set(191, stop(nums.get(191))),    //allstop.set(316, stop(nums.get(316))),    //allstop.set(441, stop(nums.get(441)))
+allstop.set(67 , stop(nums.get(67 ))),    allstop.set(192, stop(nums.get(192))),    //allstop.set(317, stop(nums.get(317))),    //allstop.set(442, stop(nums.get(442)))
+allstop.set(68 , stop(nums.get(68 ))),    allstop.set(193, stop(nums.get(193))),    //allstop.set(318, stop(nums.get(318))),    //allstop.set(443, stop(nums.get(443)))
+allstop.set(69 , stop(nums.get(69 ))),    allstop.set(194, stop(nums.get(194))),    //allstop.set(319, stop(nums.get(319))),    //allstop.set(444, stop(nums.get(444)))
+allstop.set(70 , stop(nums.get(70 ))),    allstop.set(195, stop(nums.get(195))),    //allstop.set(320, stop(nums.get(320))),    //allstop.set(445, stop(nums.get(445)))
+allstop.set(71 , stop(nums.get(71 ))),    allstop.set(196, stop(nums.get(196))),    //allstop.set(321, stop(nums.get(321))),    //allstop.set(446, stop(nums.get(446)))
+allstop.set(72 , stop(nums.get(72 ))),    allstop.set(197, stop(nums.get(197))),    //allstop.set(322, stop(nums.get(322))),    //allstop.set(447, stop(nums.get(447)))
+allstop.set(73 , stop(nums.get(73 ))),    allstop.set(198, stop(nums.get(198))),    //allstop.set(323, stop(nums.get(323))),    //allstop.set(448, stop(nums.get(448)))
+allstop.set(74 , stop(nums.get(74 ))),    allstop.set(199, stop(nums.get(199))),    //allstop.set(324, stop(nums.get(324))),    //allstop.set(449, stop(nums.get(449)))
+allstop.set(75 , stop(nums.get(75 ))),    allstop.set(200, stop(nums.get(200))),    //allstop.set(325, stop(nums.get(325))),    //allstop.set(450, stop(nums.get(450)))
+allstop.set(76 , stop(nums.get(76 ))),    allstop.set(201, stop(nums.get(201))),    //allstop.set(326, stop(nums.get(326))),    //allstop.set(451, stop(nums.get(451)))
+allstop.set(77 , stop(nums.get(77 ))),    allstop.set(202, stop(nums.get(202))),    //allstop.set(327, stop(nums.get(327))),    //allstop.set(452, stop(nums.get(452)))
+allstop.set(78 , stop(nums.get(78 ))),    allstop.set(203, stop(nums.get(203))),    //allstop.set(328, stop(nums.get(328))),    //allstop.set(453, stop(nums.get(453)))
+allstop.set(79 , stop(nums.get(79 ))),    allstop.set(204, stop(nums.get(204))),    //allstop.set(329, stop(nums.get(329))),    //allstop.set(454, stop(nums.get(454)))
+allstop.set(80 , stop(nums.get(80 ))),    allstop.set(205, stop(nums.get(205))),    //allstop.set(330, stop(nums.get(330))),    //allstop.set(455, stop(nums.get(455)))
+allstop.set(81 , stop(nums.get(81 ))),    allstop.set(206, stop(nums.get(206))),    //allstop.set(331, stop(nums.get(331))),    //allstop.set(456, stop(nums.get(456)))
+allstop.set(82 , stop(nums.get(82 ))),    allstop.set(207, stop(nums.get(207))),    //allstop.set(332, stop(nums.get(332))),    //allstop.set(457, stop(nums.get(457)))
+allstop.set(83 , stop(nums.get(83 ))),    allstop.set(208, stop(nums.get(208))),    //allstop.set(333, stop(nums.get(333))),    //allstop.set(458, stop(nums.get(458)))
+allstop.set(84 , stop(nums.get(84 ))),    allstop.set(209, stop(nums.get(209))),    //allstop.set(334, stop(nums.get(334))),    //allstop.set(459, stop(nums.get(459)))
+allstop.set(85 , stop(nums.get(85 ))),    allstop.set(210, stop(nums.get(210))),    //allstop.set(335, stop(nums.get(335))),    //allstop.set(460, stop(nums.get(460)))
+allstop.set(86 , stop(nums.get(86 ))),    allstop.set(211, stop(nums.get(211))),    //allstop.set(336, stop(nums.get(336))),    //allstop.set(461, stop(nums.get(461)))
+allstop.set(87 , stop(nums.get(87 ))),    allstop.set(212, stop(nums.get(212))),    //allstop.set(337, stop(nums.get(337))),    //allstop.set(462, stop(nums.get(462)))
+allstop.set(88 , stop(nums.get(88 ))),    allstop.set(213, stop(nums.get(213))),    //allstop.set(338, stop(nums.get(338))),    //allstop.set(463, stop(nums.get(463)))
+allstop.set(89 , stop(nums.get(89 ))),    allstop.set(214, stop(nums.get(214))),    //allstop.set(339, stop(nums.get(339))),    //allstop.set(464, stop(nums.get(464)))
+allstop.set(90 , stop(nums.get(90 ))),    allstop.set(215, stop(nums.get(215))),    //allstop.set(340, stop(nums.get(340))),    //allstop.set(465, stop(nums.get(465)))
+allstop.set(91 , stop(nums.get(91 ))),    allstop.set(216, stop(nums.get(216))),    //allstop.set(341, stop(nums.get(341))),    //allstop.set(466, stop(nums.get(466)))
+allstop.set(92 , stop(nums.get(92 ))),    allstop.set(217, stop(nums.get(217))),    //allstop.set(342, stop(nums.get(342))),    //allstop.set(467, stop(nums.get(467)))
+allstop.set(93 , stop(nums.get(93 ))),    allstop.set(218, stop(nums.get(218))),    //allstop.set(343, stop(nums.get(343))),    //allstop.set(468, stop(nums.get(468)))
+allstop.set(94 , stop(nums.get(94 ))),    allstop.set(219, stop(nums.get(219))),    //allstop.set(344, stop(nums.get(344))),    //allstop.set(469, stop(nums.get(469)))
+allstop.set(95 , stop(nums.get(95 ))),    allstop.set(220, stop(nums.get(220))),    //allstop.set(345, stop(nums.get(345))),    //allstop.set(470, stop(nums.get(470)))
+allstop.set(96 , stop(nums.get(96 ))),    allstop.set(221, stop(nums.get(221))),    //allstop.set(346, stop(nums.get(346))),    //allstop.set(471, stop(nums.get(471)))
+allstop.set(97 , stop(nums.get(97 ))),    allstop.set(222, stop(nums.get(222))),    //allstop.set(347, stop(nums.get(347))),    //allstop.set(472, stop(nums.get(472)))
+allstop.set(98 , stop(nums.get(98 ))),    allstop.set(223, stop(nums.get(223))),    //allstop.set(348, stop(nums.get(348))),    //allstop.set(473, stop(nums.get(473)))
+allstop.set(99 , stop(nums.get(99 ))),    allstop.set(224, stop(nums.get(224))),    //allstop.set(349, stop(nums.get(349))),    //allstop.set(474, stop(nums.get(474)))
+allstop.set(100, stop(nums.get(100))),    allstop.set(225, stop(nums.get(225))),    //allstop.set(350, stop(nums.get(350))),    //allstop.set(475, stop(nums.get(475)))
+allstop.set(101, stop(nums.get(101))),    allstop.set(226, stop(nums.get(226))),    //allstop.set(351, stop(nums.get(351))),    //allstop.set(476, stop(nums.get(476)))
+allstop.set(102, stop(nums.get(102))),    allstop.set(227, stop(nums.get(227))),    //allstop.set(352, stop(nums.get(352))),    //allstop.set(477, stop(nums.get(477)))
+allstop.set(103, stop(nums.get(103))),    allstop.set(228, stop(nums.get(228))),    //allstop.set(353, stop(nums.get(353))),    //allstop.set(478, stop(nums.get(478)))
+allstop.set(104, stop(nums.get(104))),    allstop.set(229, stop(nums.get(229))),    //allstop.set(354, stop(nums.get(354))),    //allstop.set(479, stop(nums.get(479)))
+allstop.set(105, stop(nums.get(105))),    allstop.set(230, stop(nums.get(230))),    //allstop.set(355, stop(nums.get(355))),    //allstop.set(480, stop(nums.get(480)))
+allstop.set(106, stop(nums.get(106))),    allstop.set(231, stop(nums.get(231))),    //allstop.set(356, stop(nums.get(356))),    //allstop.set(481, stop(nums.get(481)))
+allstop.set(107, stop(nums.get(107))),    allstop.set(232, stop(nums.get(232))),    //allstop.set(357, stop(nums.get(357))),    //allstop.set(482, stop(nums.get(482)))
+allstop.set(108, stop(nums.get(108))),    allstop.set(233, stop(nums.get(233))),    //allstop.set(358, stop(nums.get(358))),    //allstop.set(483, stop(nums.get(483)))
+allstop.set(109, stop(nums.get(109))),    allstop.set(234, stop(nums.get(234))),    //allstop.set(359, stop(nums.get(359))),    //allstop.set(484, stop(nums.get(484)))
+allstop.set(110, stop(nums.get(110))),    allstop.set(235, stop(nums.get(235))),    //allstop.set(360, stop(nums.get(360))),    //allstop.set(485, stop(nums.get(485)))
+allstop.set(111, stop(nums.get(111))),    allstop.set(236, stop(nums.get(236))),    //allstop.set(361, stop(nums.get(361))),    //allstop.set(486, stop(nums.get(486)))
+allstop.set(112, stop(nums.get(112))),    allstop.set(237, stop(nums.get(237))),    //allstop.set(362, stop(nums.get(362))),    //allstop.set(487, stop(nums.get(487)))
+allstop.set(113, stop(nums.get(113))),    allstop.set(238, stop(nums.get(238))),    //allstop.set(363, stop(nums.get(363))),    //allstop.set(488, stop(nums.get(488)))
+allstop.set(114, stop(nums.get(114))),    allstop.set(239, stop(nums.get(239))),    //allstop.set(364, stop(nums.get(364))),    //allstop.set(489, stop(nums.get(489)))
+allstop.set(115, stop(nums.get(115))),    allstop.set(240, stop(nums.get(240))),    //allstop.set(365, stop(nums.get(365))),    //allstop.set(490, stop(nums.get(490)))
+allstop.set(116, stop(nums.get(116))),    allstop.set(241, stop(nums.get(241))),    //allstop.set(366, stop(nums.get(366))),    //allstop.set(491, stop(nums.get(491)))
+allstop.set(117, stop(nums.get(117))),    allstop.set(242, stop(nums.get(242))),    //allstop.set(367, stop(nums.get(367))),    //allstop.set(492, stop(nums.get(492)))
+allstop.set(118, stop(nums.get(118))),    allstop.set(243, stop(nums.get(243))),    //allstop.set(368, stop(nums.get(368))),    //allstop.set(493, stop(nums.get(493)))
+allstop.set(119, stop(nums.get(119))),    allstop.set(244, stop(nums.get(244))),    //allstop.set(369, stop(nums.get(369))),    //allstop.set(494, stop(nums.get(494)))
+allstop.set(120, stop(nums.get(120))),    allstop.set(245, stop(nums.get(245))),    //allstop.set(370, stop(nums.get(370))),    //allstop.set(495, stop(nums.get(495)))
+allstop.set(121, stop(nums.get(121))),    allstop.set(246, stop(nums.get(246))),    //allstop.set(371, stop(nums.get(371))),    //allstop.set(496, stop(nums.get(496)))
+allstop.set(122, stop(nums.get(122))),    allstop.set(247, stop(nums.get(247))),    //allstop.set(372, stop(nums.get(372))),    //allstop.set(497, stop(nums.get(497)))
+allstop.set(123, stop(nums.get(123))),    allstop.set(248, stop(nums.get(248))),    //allstop.set(373, stop(nums.get(373))),    //allstop.set(498, stop(nums.get(498)))
+allstop.set(124, stop(nums.get(124))),    allstop.set(249, stop(nums.get(249))),    //allstop.set(374, stop(nums.get(374))),    //allstop.set(499, stop(nums.get(499)))
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+// ———————— Analyze results of Stop Functions
+var array<int> topIndices = array.new_int(sizePart)    // Array to store sorted indices
+var array<float> copyStop = array.new_float(sizePart)  // Array to store parsed stop values
+var array<string> filterSL = array.new_string()        // Array to store filtered results
+
+if barstate.islastconfirmedhistory  // Execute only on the last confirmed historical bar
+    for i = 0 to sizePart - 1 // Parse and store stop values for sorting
+        value = array.get(allstop, i)
+        array.set(copyStop, i, str.tonumber(strParse(value, sortstat, 0)))
+    topIndices := array.sort_indices(copyStop, sortstat!='Max Drawdown' ? order.descending : order.ascending) // Sort indx based on sortstat option
+
+    for i = 0 to sizePart - 1 // Filter results
+        index = array.get(topIndices, i)
+        value = array.get(allstop, index)
+        countTrade = str.tonumber(strParse(value, 'Trade', 0))
+        testSort = not na(str.tonumber(strParse(value, sortstat, 0)))
+
+        // Apply filtering logic & fill the array in sort order(sortstat)
+        if countTrade > 1 and testSort
+            filter = str.tonumber(strParse(value, filtstat, 0))
+            if filtstat == 'None' ? true : filtstat=='Max Drawdown' ? filter < filtValue : filter > filtValue
+                array.push(filterSL, value+'ID: '+str.tostring(index))
+
+    while filterSL.size() < sizePart // Fill blank values with 'na'
+        array.push(filterSL, na)
+
+getTop(int top) => string res = filterSL.size() > 0 ? filterSL.get(top) : ''
+
+// ———————— Search best Values
+var string top_1 = ''  // Stores the top 1 result
+var string top_2 = ''  // Stores the top 2 result
+var string top_3 = ''  // Stores the top 3 result
+var int topSize = input(7, 'Top in Table', inline='txtab', group=gOthers)
+if barstate.islastconfirmedhistory
+    var topProfit = array.new_float(100, 0)  // Initialize an array to store profit values
+
+    for i = 0 to topSize - 1
+        string allstat = getTop(i)                                                 // Get statistics for the current index
+        float pnlValue = str.tonumber(strParse(allstat, sortstat, 0))              // Extract SortStat value
+        int   stopType = int(str.tonumber(strParse(allstat, 'SL Type:', 0)))       // Extract stop type
+        array.set(topProfit, stopType, array.get(topProfit, stopType) + pnlValue)  // Accumulate profit by stop type
+
+    if str.contains(slTypeI, 'Auto')  // Check if stop type is 'Auto'
+        top_1 := ' ★1   #' + str.tostring(array.indexof(topProfit, array.max(topProfit, 0))) + ' | ' + str.tostring(math.round(array.max(topProfit, 0), 2)) + '  Score Sum'
+        top_2 := ' ★2   #' + str.tostring(array.indexof(topProfit, array.max(topProfit, 1))) + ' | ' + str.tostring(math.round(array.max(topProfit, 1), 2)) + '  Score Sum'
+        top_3 := ' ★3   #' + str.tostring(array.indexof(topProfit, array.max(topProfit, 2))) + ' | ' + str.tostring(math.round(array.max(topProfit, 2), 2)) + '  Score Sum'
+
+
+// ———————— Genetic Algorithm
+var float max_x1_Len = -1.0e10
+var float min_x1_Len = +1.0e10
+var float max_x2_Len = -1.0e10
+var float min_x2_Len = +1.0e10
+var float max_x3_Len = -1.0e10
+var float min_x3_Len = +1.0e10
+var array<string> newPopulation = array.new_string()
+
+if barstate.islastconfirmedhistory and not str.contains(slTypeI, 'Auto')
+    string elitism = getTop(0) // Top 1
+    var float scoreSum = 0.
+    var array<float> scores = array.new_float()
+
+    // Fitness Sum + Score save
+    for i = 0 to array.size(topIndices) - 1
+        score = str.tonumber(strParse(getTop(i), 'Score', 0))
+        score := score > 0 ? score : 0
+        array.push(scores, score)
+        scoreSum := scoreSum + score
+
+    var int numParents = 4
+    for j = 0 to numParents - 1
+        randPick = randomFloat(math.random(), 0, scoreSum)
+        selectionSum = 0.
+        for i = 0 to array.size(topIndices) - 1
+            selectionSum := selectionSum + array.get(scores, i)
+            if selectionSum >= randPick
+                array.push(newPopulation, getTop(i))
+                break
+
+    // Crossover Parent + Mutation
+    mutationRate = 0.05 // 5%
+    for i = 0 to array.size(newPopulation) - 2 by 2
+        if array.size(newPopulation) > 0 
+            p1 = array.get(newPopulation, i)    // Parent 1
+            p2 = array.get(newPopulation, i+1)  // Parent 2
+
+            p1_x1 = str.tonumber(strParse(p1, 'x1_Len:', 0)),    p2_x1 = str.tonumber(strParse(p2, 'x1_Len:', 0))
+            p1_x2 = str.tonumber(strParse(p1, 'x2_Len:', 0)),    p2_x2 = str.tonumber(strParse(p2, 'x2_Len:', 0))
+            p1_x3 = str.tonumber(strParse(p1, 'x3_Len:', 0)),    p2_x3 = str.tonumber(strParse(p2, 'x3_Len:', 0))
+
+            Child_x1 = math.avg(p1_x1, p2_x1)
+            Child_x2 = math.avg(p1_x2, p2_x2)
+            Child_x3 = math.avg(p1_x3, p2_x3)
+
+            mutationFactor = 1 + mutationRate
+            Child_x1_Mut = Child_x1 * mutationFactor
+            Child_x2_Mut = Child_x2 * mutationFactor
+            Child_x3_Mut = Child_x3 * mutationFactor
+
+            ChildOut = 'x1_Len:' + str.tostring(Child_x1_Mut) + '\n' +
+                       'x2_Len:' + str.tostring(Child_x2_Mut) + '\n' +
+                       'x3_Len:' + str.tostring(Child_x3_Mut)
+
+            array.push(newPopulation, ChildOut)
+
+    // Reproduction
+    array.push(newPopulation, elitism)
+
+    for i = 0 to array.size(newPopulation) - 1
+        x1_Len = str.tonumber(strParse(array.get(newPopulation, i), 'x1_Len:', 0))
+        x2_Len = str.tonumber(strParse(array.get(newPopulation, i), 'x2_Len:', 0))
+        x3_Len = str.tonumber(strParse(array.get(newPopulation, i), 'x3_Len:', 0))
+
+        max_x1_Len := math.round(math.max(max_x1_Len, x1_Len), 3)
+        min_x1_Len := math.round(math.min(min_x1_Len, x1_Len), 3)
+        max_x2_Len := math.round(math.max(max_x2_Len, x2_Len), 3)
+        min_x2_Len := math.round(math.min(min_x2_Len, x2_Len), 3)
+        max_x3_Len := math.round(math.max(max_x3_Len, x3_Len), 3)
+        min_x3_Len := math.round(math.min(min_x3_Len, x3_Len), 3)
+
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+// ———————— Create Dashboard
+var table statsTable = table.new(position.top_right, 50, 50, border_width = 1)
+
+shortnumber(value) => 
+    switch
+        value >= 1.0e15 => str.tostring(value / 1.0e15, '#.##') + ' 𝗣 '  // P (Peta) - quadrillions (e.g., 1.5P for 1,500,000,000,000,000)
+        value >= 1.0e12 => str.tostring(value / 1.0e12, '#.##') + ' 𝗧 '  // T (Tera) - trillions (e.g., 2T for 2,000,000,000,000)
+        value >= 1.0e9  => str.tostring(value / 1.0e9,  '#.##') + ' 𝗕 '  // B (Billion) - billions (e.g., 3.75B for 3,750,000,000)
+        value >= 1.0e6  => str.tostring(value / 1.0e6,  '#.##') + ' 𝗠 '  // M (Million) - millions (e.g., 5.2M for 5,200,000)
+        value >= 1.0e5  => str.tostring(value / 1.0e3,  '#.##') + ' 𝗞 '  // K (Thousand) - thousands (e.g., 250K for 250,000)
+        => str.tostring(value, '#')                                      // No abbreviation for numbers below 100K (e.g., 75,000 stays 75000)
+
+txtSize = input(13, 'Table Text Size', inline='txtab', group=gOthers)
+tablecell(table, colm, row, bg, txtcol, halign, txt, TT) => if barstate.islastconfirmedhistory
+    table.cell(table, colm, row, txt, bgcolor=bg, text_color=txtcol, text_size=txtSize, text_halign=halign=='L' ? text.align_left : text.align_center, tooltip=TT)
+table.set_border_color(statsTable, #2E2E2E) // in
+table.set_border_width(statsTable, 1)
+table.set_frame_color(statsTable, #232639) // out
+table.set_frame_width(statsTable, 1)
+
+// ———————— Dashboard Info
+// Main Colors
+x11 = input(#111419, 'Table Colors: ', inline='tab', group=gOthers) // Headers
+x22 = input(#191c21, '', inline='tab', group=gOthers) // Stats
+x33 = input(#D1D4DC, '', inline='tab', group=gOthers) // Font
+
+// Headers
+tablecell(statsTable, 0, 0, x11, x33, '', 'Trades', 'Count Trades')
+tablecell(statsTable, 1, 0, x11, x33, '', 'Score', 'Auto assigns weights to calculate Score based on - Trade, Profit, WinRate, Profit Factor, Drawdown, Sharpe & Sortino & Omega & Calmar Ratio')
+tablecell(statsTable, 2, 0, x11, x33, '', 'Profit', 'Profit in Percent with Commission')
+tablecell(statsTable, 3, 0, x11, x33, '', 'WR', 'Win Rate Percent')
+tablecell(statsTable, 4, 0, x11, x33, '', 'Factor', 'Profit Factor')
+tablecell(statsTable, 5, 0, x11, x33, '', 'Max DD', 'Max Drawdown')
+tablecell(statsTable, 6, 0, x11, x33, '', 'Parameters', 'Indicates the Lengths used in test')
+tablecell(statsTable, 7, 0, x11, x33, '', 'TP', 'Take Profit Percent')
+tablecell(statsTable, 8, 0, x11, x33, '', 'SL Type', 'Stop Loss Type')
+tablecell(statsTable, 9, 0, x11, x33, '', 'ID', 'Result Identifier')
+
+// Headers Data
+roundString(src, round) => str.tostring(math.round(str.tonumber(src), round))
+topResults() =>
+    if barstate.islastconfirmedhistory
+        var bestIDsave = array.new_float()
+        for i = 0 to topSize - 1
+            stats = getTop(i)
+            x1_Len = strParse(stats, 'x1_Len:', 0)
+            x2_Len = strParse(stats, 'x2_Len:', 0)
+            x3_Len = strParse(stats, 'x3_Len:', 0)
+            tp_Len = strParse(stats, 'tp_Len:', 0)
+
+            tablecell(statsTable, 0, i+1, x22, x33, ' ', roundString(strParse(stats, 'Trade', 0), 0), '')
+            tablecell(statsTable, 1, i+1, x22, x33, ' ', roundString(strParse(stats, 'Score', 0), 2), '')
+            tablecell(statsTable, 2, i+1, x22, x33, ' ', roundString(strParse(stats, 'Net Profit', 0), 2), '')
+            tablecell(statsTable, 3, i+1, x22, x33, ' ', roundString(strParse(stats, 'Win Rate', 0), 2), '')
+            tablecell(statsTable, 4, i+1, x22, x33, ' ', roundString(strParse(stats, 'Profit Factor', 0), 2), '')
+            tablecell(statsTable, 5, i+1, x22, x33, ' ', roundString(strParse(stats, 'Max Drawdown', 0), 2), '')
+            tablecell(statsTable, 6, i+1, x22, x33, ' ', str.format(' {0}, {1}, {2} ', x1_Len, x2_Len, x3_Len), '')
+            tablecell(statsTable, 7, i+1, x22, x33, ' ', strParse(stats, 'tp_Len', 0), '')
+            tablecell(statsTable, 8, i+1, x22, x33, ' ', (str.contains(slTypeI, 'MA') ? 'MA ' : '') + '# ' + (slTypeI=='[7] MA' ? strParse(maStopType, '_', 0) : strParse(stats, 'SL Type:', 0)), '')
+            tablecell(statsTable, 9, i+1, x22, x33, ' ', strParse(stats, 'ID', 0), '')
+            array.push(bestIDsave, str.tonumber(strParse(stats, 'ID', 0)))
+        bestIDsave
+bestIDsave = topResults()
+
+if tpTypeI == 'None'
+    for i = 0 to topSize // Display Take Profit
+        table.merge_cells(statsTable, 6, i, 7, i)
+
+// Combinations Data
+tablecell(statsTable, 0, topSize+1, x11, x33, '',
+     'Total Combinations: ' + shortnumber(totalPart * sizePart) + '\n' + 
+     'Part: ' + str.tostring(portion+1) + ' / ' + shortnumber(totalPart) + '\n' + 
+     'MEP: ' + str.tostring(int(totalPart * 0.1) < 10000 ? totalPart : int(totalPart * 0.1)) + ' | ' + 'SP: ' + str.tostring(sizePart) + ' | ' + 'Showed: ' + str.tostring(shortnumber((portion + 1) * sizePart)),
+     'MEP - Quantity of Most Effective Parts(ascending). \nSP - Size Part - Quantity of backtests to be checked per part. \n Showed - Total Quantity of backtests showed.')
+table.merge_cells(statsTable, 0, topSize+1, 4, topSize+1)
+
+// Other Data
+tablecell(statsTable, 5, topSize+1, x11, x33, '', str.contains(slTypeI, 'Auto') ?
+     top_1 + '\n' + top_2 + '\n' + top_3 :
+     'x1_Len: ' +  str.tostring(max_x1_Len) + '    Min: ' + str.tostring(min_x1_Len) + '\n' + 
+     'x2_Len: ' +  str.tostring(max_x2_Len) + '    Min: ' + str.tostring(min_x2_Len) + '\n' + 
+     'x3_Len: ' +  str.tostring(max_x3_Len) + '    Min: ' + str.tostring(min_x3_Len),
+     'In Auto Mode the field shows the Sum of Sort from the best SL Types. In Manual mod the field shows the Genetic Algorithm Recommendations.')
+table.merge_cells(statsTable, 5, topSize+1, 9, topSize+1)
+
+// Help Panel Info
+debugONOF = input.bool(false,   'Debug',        inline='tab', group=gOthers)
+helplONOF = input.bool(true,    'Help Panel',   inline='tab', group=gOthers)
+debugStop = debugONOF ? '\n' + str.tostring(stop(nums.get(bestid))) : ''
+string HelperInfo = ''
+if barstate.islastconfirmedhistory
+    HelperInfo := ''
+         + (bestid == -1 ? '➤ Engine Started ━ Select any ID from Table and enter the ID field' + '\n' : '') 
+         + (str.contains(slTypeI, 'Auto') ? '➤ Auto Mode ━ Select SL Type using Score stats or you like best for Manual settings' + '\n' : '')
+         + (not str.contains(slTypeI, 'Auto') ? '➤ Manual Mode ━ Use Genetic Algorithm Tips to sort the best results' + '\n' : '')
+         + (not na(bestIDsave) and not array.includes(bestIDsave, bestid) and bestid != -1 ? '➤ The ID displayed is not the best result from the table' + '\n' : '')
+         + (array.sum(defSumInput) > 0 ? '➤ SL lengths updated ━ follow sorting steps or reset Engine settings for new search' + '\n' : '')
+         + (totalPart < 10 ? '➤ Limited parts left ━ manual review of the last Parts is better than shortening. \n Select the best ID from the last Parts or restart Engine if needed' + '\n' : '')
+         + (tpTypeI=='T.ᴠᴏʟᴀᴛʏ' and volatyType!='S.FIXED %' ? '➤ This TP mode is always equal SL parameters. Because needed many resources' + '\n' : '')
+         + debugStop
+HelperInfo := str.endswith(HelperInfo, '\n') ? str.substring(HelperInfo, 0, str.length(HelperInfo) - 1) : HelperInfo // Delete extra from end \n
+
+if helplONOF
+    tablecell(statsTable, 0, topSize+3, x11, x33, '', HelperInfo, '')
+    table.merge_cells(statsTable, 0, topSize+3, 9, topSize+3)
+
+// —————————————————————————————————————————————————————————————————————————————————————————————————————————————————— \\
+// ———————— Plot best result
+strtPrice = ta.valuewhen(time_close[1] <= barTime and time >= barTime, close, 0)
+line.new(barTime, start, barTime, start > strtPrice ? +1.0e10 : start < strtPrice ? -1.0e10 : start, xloc.bar_time, color = #ff9900b4)
+line.new(barTime, start, barTime, start > strtPrice ? +1.0e10 : start < strtPrice ? -1.0e10 : start, xloc.bar_time, color = #ff9900b4)
+plotchar(time_close[1] <= barTime and time >= barTime ? start : na, 'Start', color=#ff9900b4, char='●', location=location.absolute, size=size.tiny, display=display.all-display.data_window)
+
+topstop = bestid == -1 ? '' : stop(nums.get(bestid) + ',' + 'showStop')
+inLong  = str.contains(strParse(topstop, 'inLong ', 1), 'true') ? true : false
+inShort = str.contains(strParse(topstop, 'inShort', 1), 'true') ? true : false
+inTrade = inLong or inShort
+tpPrice = str.tonumber(strParse(topstop, 'tpPrice', 0))
+slPrice = str.tonumber(strParse(topstop, 'slPrice', 0))
+tpTrue  = tpTypeI != 'None'
+entry   = ta.valuewhen((inLong and not inLong[1]) or (inShort and not inShort[1]), close, 0)
+Price   = inTrade and tpTrue ? inLong and slPrice > entry or inShort and slPrice < entry ? slPrice : entry : close
+bullcolor  = input.color(#00bbd4fd,   'SL/TP Colors:  FG', inline='col', group=gOthers)
+bearcolor  = input.color(#c2185cfd,   '',                  inline='col', group=gOthers)
+bullcolorb = input.color(#00bbd41a,   'BG',                inline='col', group=gOthers)
+bearcolorb = input.color(#c2185c1a,   '',                  inline='col', group=gOthers)
+
+tpl = plot(inLong  ? tpPrice : na, 'Take',  color=tpTrue ? bullcolor : bullcolor, style=plot.style_linebr, editable=false)
+tps = plot(inShort ? tpPrice : na, 'Take',  color=tpTrue ? bullcolor : bearcolor, style=plot.style_linebr, editable=false)
+sll = plot(inLong  ? slPrice : na, 'Stop',  color=tpTrue ? bearcolor : bullcolor, style=plot.style_linebr, editable=false)
+sls = plot(inShort ? slPrice : na, 'Stop',  color=tpTrue ? bearcolor : bearcolor, style=plot.style_linebr, editable=false)
+enl = plot(inLong  ? Price   : na, 'Price', color=Price != slPrice ? (not tpTrue ? na : #787b86) : na, style=plot.style_linebr)
+ens = plot(inShort ? Price   : na, 'Price', color=Price != slPrice ? (not tpTrue ? na : #787b86) : na, style=plot.style_linebr)
+
+fill(tpl, enl, color=tpTrue ? bullcolorb : bullcolorb, editable=false)
+fill(sll, enl, color=tpTrue ? bearcolorb : bullcolorb, editable=false)
+fill(tps, ens, color=tpTrue ? bullcolorb : bearcolorb, editable=false)
+fill(sls, ens, color=tpTrue ? bearcolorb : bearcolorb, editable=false)
+
+//plotchar(entry != entry[1] ? entry   : na, 'Entry', color=#e65100, char='⮞', location=location.absolute, size=size.tiny, offset=-1, display=display.all-display.data_window)
+//plot(str.tonumber(strParse(topstop, 'SLTPhit', 0)), 'SLTPhit')
+plotchar(entry != entry[1] ? tpPrice : na, 'Take ', color=tpTrue ? bullcolor : inLong ? bullcolor : inShort ? bearcolor : na, char='⮞', location=location.absolute, size=size.tiny, display=display.all-display.data_window)
+plot(entry != entry[1] ? slPrice : na, 'Stop', color=tpTrue ? bearcolor : inLong ? bullcolor : inShort ? bearcolor : na, linewidth=3, style=plot.style_circles, display=display.all-display.data_window)
+plot(entry != entry[1] ? slPrice : na, 'Stop', color=#000000ff, linewidth=1, style=plot.style_circles, editable=false, display=display.all-display.data_window)
