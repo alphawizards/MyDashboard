@@ -382,7 +382,7 @@ if goTests=='External Example' // Determine the lengths you will be testing in a
     uniLen3_min  := 0.0   // Min Confidence min
     uniLen3_step := 0.05
 
-YourFunction(series int len1, series float len2, series float len3) =>
+YourFunction(len1, len2, len3) =>
     float volThresh = len2
     float minConf   = len3
 
