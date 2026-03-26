@@ -57,7 +57,7 @@ tvolatyType   = input.string ('ATR',             '  T.ᴠᴏʟᴀᴛʏ  
 volatyType    = input.string ('ATR',             '  S.ᴠᴏʟᴀᴛʏ   ',      inline='vol', options=['ATR', 'STDEV', 'S.FIXED %'], tooltip=TT_4)
 typeDeal      = input.string ('Both',            '  Trade Type ',      inline='mas', options=['Both', 'Long', 'Short'])
 maStopType    = input.string ('[1] ALMA',        '  MA Stops  ',       inline='mas', options=['[1] ALMA', '[2] EMA', '[3] HMA', '[4] LRC', '[5] RMA', '[6] SMA', '[7] VWMA', '[8] WMA', '[9] ZLMA'], tooltip=TT_5)
-goTests       = input.string ('Stops',           '  Testing    ',      inline='tes', options=['Stops', 'Pivot Point Example', 'External Example', 'External Signal'])
+goTests       = input.string ('External Example', '  Testing    ',      inline='tes', options=['Stops', 'Pivot Point Example', 'External Example', 'External Signal'])
 backWin       = input.int    (2000,              '   BackWin  ',       inline='tes', tooltip=TT_6)
 
 onofSL1       = input.bool   (true,              '[1]',                inline='onof')
