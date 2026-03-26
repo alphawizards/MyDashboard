@@ -372,15 +372,15 @@ VOLATY(string TAKE, string STOP, float fixed, float period, float multiplier) =>
 // You can test up to 3 lengths of any of your functions.
 // In this mode, entry is made at the market and will be closed Only on a new Long or Short signal.
 if goTests=='External Example' // Determine the lengths you will be testing in advance.
-    uniLen1_max  := 9  
-    uniLen1_min  := 1  
-    uniLen1_step := 1  
-    uniLen2_max  := 200
-    uniLen2_min  := 2  
-    uniLen2_step := 1  
-    uniLen3_max  := 200
-    uniLen3_min  := 2  
-    uniLen3_step := 1  
+    uniLen1_max  := 50    // ATR Period max
+    uniLen1_min  := 5     // ATR Period min
+    uniLen1_step := 1
+    uniLen2_max  := 5.0   // Vol Threshold max
+    uniLen2_min  := 0.5   // Vol Threshold min
+    uniLen2_step := 0.1
+    uniLen3_max  := 1.0   // Min Confidence max
+    uniLen3_min  := 0.0   // Min Confidence min
+    uniLen3_step := 0.05
 
 YourFunction(int len1, int len2, int len3) => // Example MA Crosses
     MA1  = MA(slType(len1, 'ma'), close, len2)
