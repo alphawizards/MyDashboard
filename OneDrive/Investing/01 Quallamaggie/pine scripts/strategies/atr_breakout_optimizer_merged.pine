@@ -382,13 +382,12 @@ if goTests=='External Example' // Determine the lengths you will be testing in a
     uniLen3_min  := 0.0   // Min Confidence min
     uniLen3_step := 0.05
 
-YourFunction(int len1, float len2, float len3) =>
-    float atrPeriod = float(len1)
+YourFunction(series int len1, series float len2, series float len3) =>
     float volThresh = len2
     float minConf   = len3
 
-    float _atr     = ta.atr(int(atrPeriod))
-    float _avgAtr  = ta.sma(_atr, 5)
+    float _atr     = ATR(len1)
+    float _avgAtr  = SMA(_atr, 5)
     float _tr      = ta.tr(true)
     float _pctChg  = nz(close[1]) != 0 ? math.abs((close - close[1]) / close[1]) * 100.0 : 0.0
     bool  _hasData = not na(_atr) and not na(_avgAtr) and _avgAtr > 0
