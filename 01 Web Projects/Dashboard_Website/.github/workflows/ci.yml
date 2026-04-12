@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+defaults:
+  run:
+    working-directory: app-next
+
+jobs:
+  lint:
+    name: ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app-next/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+        # Gate 7.2 — zero errors, zero warnings
+
+  typecheck:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app-next/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+        # Gate 7.1 — strict: true, zero errors
+
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app-next/package-lock.json
+      - run: npm ci
+      - run: npm test
+        # Phase 1: empty Vitest suite passes; Phase 3+ adds real tests
+
+  build:
+    name: Production Build
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app-next/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        # Gate 7.5 — production build must succeed
+        env:
+          # Stub values so the build doesn't fail on missing env vars.
+          # Real values live in Railway environment (Phase 7).
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_stub
+          CLERK_SECRET_KEY: sk_test_stub
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+  size-limit:
+    name: Bundle Size
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app-next/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_stub
+          CLERK_SECRET_KEY: sk_test_stub
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+      - run: npm run size
+        # Gate 7 — JS bundle must not grow >10% vs main baseline
+        # size-limit config is in package.json "size-limit" key
+
+  lighthouse-ci:
+    name: Lighthouse CI
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: false # Phase 8 — requires seeded DB + deployed preview URL; re-enable then
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: app-next/package-lock.json
+      - run: npm ci
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_stub
+          CLERK_SECRET_KEY: sk_test_stub
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
+      - run: npx lhci autorun --collect.startServerCommand="npm start" --collect.url="http://localhost:3000/dashboard"
+        # Gate 8 — all categories ≥90 (becomes meaningful once Phase 8 populates pages)
+        # Phase 1: may not hit 90 on all categories; re-gate in Phase 8
+
+  # ─── Spec Baseline ─────────────────────────────────────────────────────────
+  # Runs at repo root (not app-next) — override working-directory.
+  baseline:
+    name: Fixture A Baseline
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: '.'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verify Fixture A calculations
+        run: |
+          OUTPUT=$(node tools/verify_fixture_a.js)
+          echo "$OUTPUT"
+          echo "$OUTPUT" | grep -q "savingsRate.*42\.65" || (echo "FAIL: savingsRate mismatch" && exit 1)
+          echo "$OUTPUT" | grep -q "monthlyIO.*5,133"   || (echo "FAIL: monthlyIO mismatch"   && exit 1)
+          echo "$OUTPUT" | grep -q "monthlyPI.*6,821"   || (echo "FAIL: monthlyPI mismatch"   && exit 1)
+          echo "Fixture A baseline: PASS"
+        # Gate 1.1 — baseline must always be 42.65 / 5,133 / 6,821
