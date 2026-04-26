@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data: https://pbs.twimg.com; frame-ancestors 'none';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>X Tracker — Sikand & Wolff</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0e17;
+    color: #e0e6ed;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  a.back-link {
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-bottom: 20px; font-size: 13px; color: #4a5578;
+    text-decoration: none; transition: color 0.15s;
+  }
+  a.back-link:hover { color: #4fc3f7; }
+
+  /* Authors bar */
+  .authors-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .author-card {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 12px;
+    padding: 16px 20px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .author-card.sikand { border-left: 3px solid #4fc3f7; }
+  .author-card.wolff  { border-left: 3px solid #10b981; }
+  .avatar {
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+  .author-info h2 { font-size: 15px; font-weight: 700; color: #fff; }
+  .author-info .handle { font-size: 12px; color: #4a5578; }
+  .author-info .bio { font-size: 11px; color: #8892a8; margin-top: 3px; }
+  .author-stats { margin-left: auto; text-align: right; flex-shrink: 0; }
+  .author-stats .followers { font-size: 15px; font-weight: 700; color: #e0e6ed; }
+  .author-stats .label { font-size: 10px; color: #4a5578; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* Tabs */
+  .tab-bar {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #2a3250;
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 10px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #4a5578;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: #e0e6ed; }
+  .tab-btn.active { color: #4fc3f7; border-bottom-color: #4fc3f7; }
+  .tab-btn.wolff-tab.active { color: #10b981; border-bottom-color: #10b981; }
+  .tab-btn .count { font-size: 10px; background: #1e2538; border-radius: 4px; padding: 1px 5px; margin-left: 4px; color: #8892a8; }
+
+  /* Author toggle */
+  .author-toggle {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .author-btn {
+    display: flex; align-items: center; gap: 7px;
+    background: #161b2e; border: 1px solid #2a3250; border-radius: 8px;
+    padding: 7px 14px; font-size: 13px; font-weight: 600; color: #4a5578;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .author-btn:hover { color: #e0e6ed; border-color: #3a4a6a; }
+  .author-btn.active-all  { background: #1a2038; border-color: #4a5578; color: #e0e6ed; }
+  .author-btn.active-s    { background: #1a2a3a; border-color: #4fc3f7; color: #4fc3f7; }
+  .author-btn.active-w    { background: #0d2a1a; border-color: #10b981; color: #10b981; }
+  .author-btn .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .author-btn .dot.s { background: #4fc3f7; }
+  .author-btn .dot.w { background: #10b981; }
+  .author-btn .dot.all { background: linear-gradient(135deg, #4fc3f7 50%, #10b981 50%); }
+
+  /* Combined feed author badge on card */
+  .author-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 700; padding: 2px 8px;
+    border-radius: 4px; border: 1px solid; text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .author-badge.s { background: #1a2a3a; border-color: #2a4a6a; color: #4fc3f7; }
+  .author-badge.w { background: #0d2a1a; border-color: #1a4a30; color: #10b981; }
+
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  /* Filter bar */
+  .filter-bar {
+    display: flex; gap: 10px; margin-bottom: 20px;
+    flex-wrap: wrap; align-items: center;
+  }
+  .filter-label { font-size: 12px; color: #4a5578; text-transform: uppercase; letter-spacing: 1px; }
+  .filter-btn {
+    background: #161b2e; border: 1px solid #2a3250; border-radius: 6px;
+    padding: 6px 14px; font-size: 12px; color: #8892a8; cursor: pointer; transition: all 0.2s;
+  }
+  .filter-btn:hover { border-color: #4fc3f7; color: #4fc3f7; }
+  .filter-btn.active { background: #1a2a3a; border-color: #4fc3f7; color: #4fc3f7; font-weight: 600; }
+  .filter-btn.wolff-active { background: #0d2a20; border-color: #10b981; color: #10b981; font-weight: 600; }
+  .search-input {
+    background: #161b2e; border: 1px solid #2a3250; border-radius: 6px;
+    padding: 6px 14px; font-size: 13px; color: #e0e6ed;
+    outline: none; width: 200px; margin-left: auto;
+  }
+  .search-input:focus { border-color: #4fc3f7; }
+  .search-input::placeholder { color: #4a5578; }
+
+  /* Ticker bar */
+  .tickers-bar {
+    background: #161b2e; border: 1px solid #2a3250; border-radius: 10px;
+    padding: 12px 16px; margin-bottom: 20px;
+    display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+  }
+  .bar-label { font-size: 11px; color: #4a5578; text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
+  .ticker-pill {
+    border-radius: 5px; padding: 3px 9px; font-size: 11px; font-weight: 700;
+    cursor: pointer; transition: all 0.15s; font-family: 'SF Mono', monospace;
+    border: 1px solid;
+  }
+  .ticker-pill.s { background: #1a2a3a; border-color: #2a4a6a; color: #4fc3f7; }
+  .ticker-pill.w { background: #0d2a1a; border-color: #1a4a30; color: #10b981; }
+  .ticker-pill.shared { background: #2a2a0d; border-color: #4a4a1a; color: #f59e0b; }
+  .ticker-pill .cnt { color: #8892a8; font-weight: 400; margin-left: 3px; font-size: 10px; }
+
+  /* Tweet grid */
+  .tweet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 14px;
+  }
+  .tweet-card {
+    background: #161b2e; border: 1px solid #2a3250; border-radius: 12px;
+    padding: 16px; display: flex; flex-direction: column; gap: 10px;
+    transition: border-color 0.2s, transform 0.1s; cursor: pointer;
+  }
+  .tweet-card:hover { border-color: #3a4a6a; transform: translateY(-1px); }
+  .tweet-card.has-ticker.s { border-left: 3px solid #4fc3f7; }
+  .tweet-card.has-ticker.w { border-left: 3px solid #10b981; }
+  .tweet-card.hot { border-left: 3px solid #f59e0b !important; }
+  .tweet-meta { display: flex; justify-content: space-between; align-items: center; }
+  .tweet-time { font-size: 11px; color: #4a5578; }
+  .eng-row { display: flex; gap: 10px; }
+  .eng { display: flex; align-items: center; gap: 3px; font-size: 11px; color: #8892a8; }
+  .eng.hot { color: #f59e0b; }
+  .tweet-text { font-size: 13px; line-height: 1.55; color: #c8d4e3; white-space: pre-wrap; word-break: break-word; }
+  .tweet-cashtags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .cashtag-tag {
+    border-radius: 4px; padding: 2px 7px; font-size: 11px; font-weight: 700;
+    font-family: 'SF Mono', monospace; border: 1px solid;
+  }
+  .cashtag-tag.s { background: #1a2a3a; border-color: #2a4a6a; color: #4fc3f7; }
+  .cashtag-tag.w { background: #0d2a1a; border-color: #1a4a30; color: #10b981; }
+  .tweet-footer {
+    display: flex; justify-content: flex-end; padding-top: 4px; border-top: 1px solid #1e2538; margin-top: auto;
+  }
+  .tweet-link { font-size: 11px; color: #4a5578; text-decoration: none; transition: color 0.15s; }
+  .tweet-link:hover { color: #4fc3f7; }
+  .empty-state { grid-column: 1/-1; text-align: center; padding: 50px; color: #4a5578; font-size: 13px; }
+
+  /* ===== BUBBLE CHART ===== */
+  .overlap-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 20px;
+  }
+  .bubble-panel {
+    background: #161b2e; border: 1px solid #2a3250; border-radius: 12px;
+    padding: 20px;
+  }
+  .bubble-panel h3 { font-size: 14px; color: #e0e6ed; margin-bottom: 6px; }
+  .bubble-panel .subtitle { font-size: 12px; color: #4a5578; margin-bottom: 16px; }
+  #bubble-svg { width: 100%; }
+
+  .legend-row {
+    display: flex; gap: 20px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8892a8; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+
+  .shared-panel {
+    background: #161b2e; border: 1px solid #2a3250; border-radius: 12px;
+    padding: 20px; display: flex; flex-direction: column; gap: 12px;
+  }
+  .shared-panel h3 { font-size: 14px; color: #e0e6ed; }
+
+  .shared-item {
+    background: #1e2538; border: 1px solid #2a3a28; border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .shared-ticker { font-size: 16px; font-weight: 700; color: #f59e0b; font-family: monospace; }
+  .shared-meta { display: flex; gap: 16px; margin-top: 6px; }
+  .shared-meta .by { font-size: 12px; }
+  .shared-meta .by span { font-weight: 600; }
+  .shared-meta .by.s span { color: #4fc3f7; }
+  .shared-meta .by.w span { color: #10b981; }
+
+  .no-shared {
+    text-align: center; padding: 30px 16px; color: #4a5578; font-size: 13px; line-height: 1.6;
+  }
+  .no-shared strong { color: #8892a8; display: block; margin-bottom: 4px; font-size: 14px; }
+
+  .sector-breakdown {
+    background: #0f1420; border: 1px solid #1e2538; border-radius: 8px; padding: 12px;
+  }
+  .sector-breakdown .sec-label { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: #4a5578; margin-bottom: 8px; }
+  .sector-row { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; color: #8892a8; }
+  .sector-row .sec-name { color: #c8d4e3; }
+
+  .refresh-note-small { font-size: 11px; color: #4a5578; text-align: center; margin-top: 8px; }
+
+  @media (max-width: 900px) {
+    .authors-bar { grid-template-columns: 1fr; }
+    .overlap-layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<a href="morning-watchlist.html" class="back-link">← Back to Watchlist</a>
+
+<!-- Author Cards -->
+<div class="authors-bar">
+  <div class="author-card sikand">
+    <img class="avatar" src="https://pbs.twimg.com/profile_images/1536185134684119040/X0UukfQa_normal.jpg" alt="Sikand" onerror="this.style.display='none'">
+    <div class="author-info">
+      <h2>Michael Sikand 🦑</h2>
+      <div class="handle">@michaelsikand</div>
+      <div class="bio">Investor · $17M AUM @joinautopilot · Forbes 30u30 · Defense & Space focus</div>
+    </div>
+    <div class="author-stats">
+      <div class="followers">63,446</div>
+      <div class="label">followers</div>
+    </div>
+  </div>
+  <div class="author-card wolff">
+    <img class="avatar" src="https://pbs.twimg.com/profile_images/1588706338443431936/ZKGkvq8P_normal.jpg" alt="Wolff" onerror="this.style.display='none'">
+    <div class="author-info">
+      <h2>Peter Wolff</h2>
+      <div class="handle">@peterjwolff</div>
+      <div class="bio">Dermatology NP · $140M AUM @joinautopilot · Tech / Macro / Precious metals</div>
+    </div>
+    <div class="author-stats">
+      <div class="followers">15,334</div>
+      <div class="label">followers</div>
+    </div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="showTab('all', this)">📋 All Feed <span class="count" id="all-count">39</span></button>
+  <button class="tab-btn" onclick="showTab('sikand', this)">🦑 Sikand <span class="count" id="s-count">19</span></button>
+  <button class="tab-btn wolff-tab" onclick="showTab('wolff', this)">Peter Wolff <span class="count" id="w-count">20</span></button>
+  <button class="tab-btn" onclick="showTab('overlap', this)">🫧 Overlap <span class="count" id="ov-count">0</span></button>
+</div>
+
+<!-- ALL FEED TAB -->
+<div id="tab-all" class="tab-pane active">
+  <div class="filter-bar">
+    <div class="author-toggle">
+      <button class="author-btn active-all" id="af-all" onclick="setAuthorFilter('all')">
+        <span class="dot all"></span> Both
+      </button>
+      <button class="author-btn" id="af-s" onclick="setAuthorFilter('s')">
+        <span class="dot s"></span> Sikand
+      </button>
+      <button class="author-btn" id="af-w" onclick="setAuthorFilter('w')">
+        <span class="dot w"></span> Wolff
+      </button>
+    </div>
+    <button class="filter-btn active" id="af-filter-all" onclick="setAllFilter('all',this)">All</button>
+    <button class="filter-btn" onclick="setAllFilter('tickers',this)">Stock Mentions</button>
+    <button class="filter-btn" onclick="setAllFilter('hot',this)">🔥 Hot</button>
+    <input class="search-input" id="all-search" placeholder="Search or $TICKER…" oninput="applyAllFilter()">
+  </div>
+  <div class="tweet-grid" id="all-grid"></div>
+</div>
+
+<!-- SIKAND TAB -->
+<div id="tab-sikand" class="tab-pane">
+  <div class="filter-bar">
+    <span class="filter-label">Filter</span>
+    <button class="filter-btn active" onclick="setFilter('s','all',this)">All</button>
+    <button class="filter-btn" onclick="setFilter('s','tickers',this)">Stock Mentions</button>
+    <button class="filter-btn" onclick="setFilter('s','hot',this)">🔥 Hot</button>
+    <input class="search-input" id="s-search" placeholder="Search or $TICKER…" oninput="applyFilter('s')">
+  </div>
+  <div class="tickers-bar" id="s-tickers-bar"><span class="bar-label">Tickers</span></div>
+  <div class="tweet-grid" id="s-grid"></div>
+</div>
+
+<!-- WOLFF TAB -->
+<div id="tab-wolff" class="tab-pane">
+  <div class="filter-bar">
+    <span class="filter-label">Filter</span>
+    <button class="filter-btn active" onclick="setFilter('w','all',this)">All</button>
+    <button class="filter-btn" onclick="setFilter('w','tickers',this)">Stock Mentions</button>
+    <button class="filter-btn" onclick="setFilter('w','hot',this)">🔥 Hot</button>
+    <input class="search-input" id="w-search" placeholder="Search or $TICKER…" oninput="applyFilter('w')">
+  </div>
+  <div class="tickers-bar" id="w-tickers-bar"><span class="bar-label">Tickers</span></div>
+  <div class="tweet-grid" id="w-grid"></div>
+</div>
+
+<!-- OVERLAP TAB -->
+<div id="tab-overlap" class="tab-pane">
+  <div class="overlap-layout">
+    <div class="bubble-panel">
+      <h3>Ticker Mention Map</h3>
+      <p class="subtitle">Bubble size = total mentions. Colour = who mentioned it. Gold = both.</p>
+      <div class="legend-row">
+        <div class="legend-item"><div class="legend-dot" style="background:#4fc3f7"></div> Sikand only</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#10b981"></div> Wolff only</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#f59e0b"></div> Both mentioned</div>
+      </div>
+      <svg id="bubble-svg" height="480"></svg>
+    </div>
+    <div class="shared-panel">
+      <h3>🎯 Shared Tickers</h3>
+      <div id="shared-list"></div>
+      <div class="sector-breakdown" style="margin-top:8px">
+        <div class="sec-label">Sikand focus areas</div>
+        <div class="sector-row"><span class="sec-name">Defense / Drones</span><span>$AVEX, $RCAT, $DPRO…</span></div>
+        <div class="sector-row"><span class="sec-name">Space</span><span>$FLY, $BKSY…</span></div>
+        <div class="sector-row"><span class="sec-name">Critical Minerals</span><span>$USAR, $UUUU…</span></div>
+      </div>
+      <div class="sector-breakdown">
+        <div class="sec-label">Wolff focus areas</div>
+        <div class="sector-row"><span class="sec-name">AI / Datacenters</span><span>$NBIS, $IREN…</span></div>
+        <div class="sector-row"><span class="sec-name">Big Tech</span><span>$META, $AMZN, $MSFT</span></div>
+        <div class="sector-row"><span class="sec-name">Macro / Metals</span><span>$GLTR, $SGOV</span></div>
+      </div>
+      <div class="refresh-note-small">Fetched 2026-04-23 05:04 AEST</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Safe URL opener — only allows x.com and finance.yahoo.com origins
+function safeOpen(url, expectedOrigin) {
+  try {
+    const parsed = new URL(url);
+    const allowed = ['https://x.com', 'https://twitter.com', 'https://finance.yahoo.com'];
+    const origin = expectedOrigin || 'https://x.com';
+    if (!allowed.includes(parsed.origin)) return;
+    const w = window.open('', '_blank');
+    if (w) { w.opener = null; w.location = parsed.href; }
+  } catch(e) { /* invalid URL — do nothing */ }
+}
+
+// ── DATA ─────────────────────────────────────────────────────────────────────
+
+const SIKAND_TWEETS = [
+  {
+    "id": "2047028155303801219",
+    "text": "Wtf guys I was just joking. https://t.co/g5dktC9oAF https://t.co/0y2mFNe9wq",
+    "created_at": "Apr 23, 05:01 AEST",
+    "likes": 15,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2047028155303801219"
+  },
+  {
+    "id": "2047000439519060328",
+    "text": "Congratulations to my friend @ankurnagpal  \n\nIf anyone knows the asymmetry of private assets, it's a founder who sold two VC backed co's for $100Ms.\n\nUSVC is democratizing private assets and it's run by a guy who actually built/ran startups unlike 99.9% of VCs. https://t.co/zkx7QhVR6r",
+    "created_at": "Apr 23, 03:11 AEST",
+    "likes": 51,
+    "retweets": 3,
+    "replies": 5,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2047000439519060328"
+  },
+  {
+    "id": "2046997417409835282",
+    "text": "@ankurnagpal @naval Congratulations Ankur. This is huge for retail investors and the structure is so much friendlier than other formats for long-term growth.",
+    "created_at": "Apr 23, 02:59 AEST",
+    "likes": 4,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046997417409835282"
+  },
+  {
+    "id": "2046979573880099177",
+    "text": "@joinautopilot https://t.co/mDmCarS4mN",
+    "created_at": "Apr 23, 01:48 AEST",
+    "likes": 2,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046979573880099177"
+  },
+  {
+    "id": "2046977870329938068",
+    "text": "@ParadisLabs Yves saint laurent.",
+    "created_at": "Apr 23, 01:42 AEST",
+    "likes": 3,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046977870329938068"
+  },
+  {
+    "id": "2046974055673479299",
+    "text": "Loaded more $AVEX here.\n\nDefense official: \"The vast majority of the $75 billion is aimed at evaluating, purchasing or modifying drone systems that are already in use\"\n\n$AVEX has shipped 10,000 Group I-V drones to Ukraine across two DoD contracts worth $1.2B. https://t.co/prJRwNXkUG",
+    "created_at": "Apr 23, 01:27 AEST",
+    "likes": 149,
+    "retweets": 9,
+    "replies": 18,
+    "cashtags": [
+      "$AVEX",
+      "$AVEX"
+    ],
+    "url": "https://x.com/michaelsikand/status/2046974055673479299"
+  },
+  {
+    "id": "2046964630380236939",
+    "text": "@ParadisLabs @ParadisLabs another excellent take.\n\nWe are indeed in a stock pickers market and if you followed even just a few decent X accounts you made several generational trades.\n\nMight have to take my girlfriend shopping to soak in Soitec's blistering run!",
+    "created_at": "Apr 23, 00:49 AEST",
+    "likes": 11,
+    "retweets": 1,
+    "replies": 2,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046964630380236939"
+  },
+  {
+    "id": "2046962391674667343",
+    "text": "@ParadisLabs @demetriusweb3 Literally unreal time to be on FinX.",
+    "created_at": "Apr 23, 00:40 AEST",
+    "likes": 1,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046962391674667343"
+  },
+  {
+    "id": "2046955729127706671",
+    "text": "@Robarbarian38 chopping. waiting until it wakes up",
+    "created_at": "Apr 23, 00:14 AEST",
+    "likes": 0,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046955729127706671"
+  },
+  {
+    "id": "2046944441366466984",
+    "text": "NO RISK, NO RARI https://t.co/CUKjwXh6hm https://t.co/l8MItp6I1t",
+    "created_at": "Apr 22, 23:29 AEST",
+    "likes": 103,
+    "retweets": 4,
+    "replies": 6,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046944441366466984"
+  },
+  {
+    "id": "2046840776718782548",
+    "text": "RT @ParadisLabs: Thoughts on Nynomic ($M7U) at €145M MC:\n\nCaution: this is a numbers-heavy post where I walk through some of my modelling.…",
+    "created_at": "Apr 22, 16:37 AEST",
+    "likes": 0,
+    "retweets": 17,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046840776718782548"
+  },
+  {
+    "id": "2046810015894548977",
+    "text": "@cwamidon @conorfriedmann4 chris wheres this ss from?",
+    "created_at": "Apr 22, 14:35 AEST",
+    "likes": 0,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046810015894548977"
+  },
+  {
+    "id": "2046805978927210796",
+    "text": "@xm_build bro what",
+    "created_at": "Apr 22, 14:19 AEST",
+    "likes": 11,
+    "retweets": 0,
+    "replies": 3,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046805978927210796"
+  },
+  {
+    "id": "2046798103685308484",
+    "text": "@AndurilInvestor Not stoked man.",
+    "created_at": "Apr 22, 13:47 AEST",
+    "likes": 1,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046798103685308484"
+  },
+  {
+    "id": "2046796409475944604",
+    "text": "@CKCapitalxx actually diabolical",
+    "created_at": "Apr 22, 13:41 AEST",
+    "likes": 3,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/michaelsikand/status/2046796409475944604"
+  },
+  {
+    "id": "2046795263793393719",
+    "text": "My uncle who I full ported in $KRKNF called me today so excited.\n\nI couldn't tell him... https://t.co/K6BwAmllfn",
+    "created_at": "Apr 22, 13:36 AEST",
+    "likes": 429,
+    "retweets": 9,
+    "replies": 31,
+    "cashtags": [
+      "$KRKNF"
+    ],
+    "url": "https://x.com/michaelsikand/status/2046795263793393719"
+  },
+  {
+    "id": "2046742273225048425",
+    "text": "Before you shoot me a follow. Check out my favorite.\n\n$AVEX: Brand new drone IPO doing $400M+ revenue in 2025 with positive EBITDA margins. $1.2B in sole sourced DoD contracts already won and 10K drones sent to Ukraine. Newest to the market, still misunderstood. I wrote a report. https://t.co/FneHEJcoYX",
+    "created_at": "Apr 22, 10:05 AEST",
+    "likes": 39,
+    "retweets": 4,
+    "replies": 1,
+    "cashtags": [
+      "$AVEX"
+    ],
+    "url": "https://x.com/michaelsikand/status/2046742273225048425"
+  },
+  {
+    "id": "2046742270800699434",
+    "text": "MICROREACTORS FOR BASES: $300M+\n\nMini nuclear plants powering every US base.\n\nProject Pele prototype fielding. Resilient power for installations.\n\n$SMR, small modular reactors \n$NNE, microreactors for bases \n$LEU, nuclear fuel for small reactors https://t.co/ivA9f6dsvl",
+    "created_at": "Apr 22, 10:05 AEST",
+    "likes": 30,
+    "retweets": 1,
+    "replies": 4,
+    "cashtags": [
+      "$SMR",
+      "$NNE",
+      "$LEU"
+    ],
+    "url": "https://x.com/michaelsikand/status/2046742270800699434"
+  },
+  {
+    "id": "2046742268724625909",
+    "text": "MUNITIONS: $52.9B\n\nRebuilding the bullet stockpile America hasn't had since the Cold War.\n\n$ALM, tungsten for armor-piercing rounds \n$UAMY, antimony for primers \n$POWW, NATO ammo https://t.co/ZIvGrD33OC",
+    "created_at": "Apr 22, 10:05 AEST",
+    "likes": 8,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [
+      "$ALM",
+      "$UAMY",
+      "$POWW"
+    ],
+    "url": "https://x.com/michaelsikand/status/2046742268724625909"
+  },
+  {
+    "id": "2046742266321191274",
+    "text": "CRITICAL MINERALS: $48.8B\n\nBreaking China's grip on the minerals in every US weapon. Rare earths, titanium, gallium, graphite. Mine to metal strategy.\n\n$USAR, Oklahoma rare earth magnets\n$UUUU, rare earth separation\n$IPX, titanium for defense\n$CRML, Greenland rare earths https://t.co/AI97z3rAjS",
+    "created_at": "Apr 22, 10:05 AEST",
+    "likes": 14,
+    "retweets": 0,
+    "replies": 2,
+    "cashtags": [
+      "$USAR",
+      "$UUUU",
+      "$IPX",
+      "$CRML"
+    ],
+    "url": "https://x.com/michaelsikand/status/2046742266321191274"
+  }
+];
+
+const WOLFF_TWEETS = [
+  {
+    "id": "2046996231457763645",
+    "text": "Be careful trusting all your BREAKING 🚨 bear market information sources on social media.\n\nThanks for calling it out @LynAldenContact https://t.co/kA4M32niW2",
+    "created_at": "Apr 23, 02:55 AEST",
+    "likes": 18,
+    "retweets": 2,
+    "replies": 3,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2046996231457763645"
+  },
+  {
+    "id": "2046792318691471767",
+    "text": "@DGretta_Author Bear markets are the worst!",
+    "created_at": "Apr 22, 13:24 AEST",
+    "likes": 3,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2046792318691471767"
+  },
+  {
+    "id": "2046616248650551503",
+    "text": "Weekly deposit today into the little datacenter dip.\n\n20% Wolff's Flagship Fund\n20% ETF Strategy\n20% All Weather\n20% Top 15\n20% Crypto Revolution https://t.co/ogOZoQhP8W",
+    "created_at": "Apr 22, 01:45 AEST",
+    "likes": 26,
+    "retweets": 0,
+    "replies": 4,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2046616248650551503"
+  },
+  {
+    "id": "2046314294552490315",
+    "text": "@realroseceline Courses don't sell themselves.\n\nBut 100x price targets sell courses!",
+    "created_at": "Apr 21, 05:45 AEST",
+    "likes": 6,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2046314294552490315"
+  },
+  {
+    "id": "2046311351392546865",
+    "text": "FAQ 2: Addressing the Cash Controversy - Why I Keep $SGOV\n \nhttps://t.co/LGwDaleNQL\n\n“Reality is far more vicious than Russian roulette. First, it delivers the fatal bullet rather infrequently, like a revolver that would have hundreds, even thousands of chambers instead of six. https://t.co/vDtreZJbfB",
+    "created_at": "Apr 21, 05:33 AEST",
+    "likes": 20,
+    "retweets": 0,
+    "replies": 11,
+    "cashtags": [
+      "$SGOV"
+    ],
+    "url": "https://x.com/peterjwolff/status/2046311351392546865"
+  },
+  {
+    "id": "2045951813141307604",
+    "text": "@BlackPantherCap @joinautopilot @TradureApp Excellent returns in both measures, especially impressive YTD with this Iran conflict!",
+    "created_at": "Apr 20, 05:44 AEST",
+    "likes": 3,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045951813141307604"
+  },
+  {
+    "id": "2045931351661256895",
+    "text": "@BlackPantherCap @joinautopilot @TradureApp Thank you, seems like you're having a good year too 🥂",
+    "created_at": "Apr 20, 04:23 AEST",
+    "likes": 1,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045931351661256895"
+  },
+  {
+    "id": "2045913051808014570",
+    "text": "https://t.co/TATvqfLaBI https://t.co/ZGli1IeVCa",
+    "created_at": "Apr 20, 03:10 AEST",
+    "likes": 5,
+    "retweets": 1,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045913051808014570"
+  },
+  {
+    "id": "2045910938042396805",
+    "text": "Good morning,\n\nWeekly Flagship report is up!\n\nIn addition to my accumulation zones and macro data, I write some of my thoughts on the market recovery, Strait of Hormuz, and $NBIS &amp; $WULF trims.\n\nEnjoy!\n\nSubstack Link: https://t.co/jgFzZSs5Or\n\nFlagship Link: https://t.co/XmBMqYwy3y",
+    "created_at": "Apr 20, 03:02 AEST",
+    "likes": 29,
+    "retweets": 2,
+    "replies": 18,
+    "cashtags": [
+      "$NBIS",
+      "$WULF"
+    ],
+    "url": "https://x.com/peterjwolff/status/2045910938042396805"
+  },
+  {
+    "id": "2045715725013373049",
+    "text": "@TheBronxViking @LadeBackk The money’s in the trades, not the copied posts https://t.co/XeHkFQPU2F",
+    "created_at": "Apr 19, 14:06 AEST",
+    "likes": 1,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045715725013373049"
+  },
+  {
+    "id": "2045698419755454510",
+    "text": "@TheBronxViking @LadeBackk Rest assured I’ll never post for a X payout, don’t need it 🥂\n\nI have $IREN and $CIFR",
+    "created_at": "Apr 19, 12:58 AEST",
+    "likes": 3,
+    "retweets": 0,
+    "replies": 2,
+    "cashtags": [
+      "$IREN",
+      "$CIFR"
+    ],
+    "url": "https://x.com/peterjwolff/status/2045698419755454510"
+  },
+  {
+    "id": "2045358229631451421",
+    "text": "Wow, that’s an impressive @joinautopilot portfolio!\n\nThat combination probably weathered the recent volatility similarly to mine.\n\nI do have more ETF Strategy and Medical Edge mixed in though.\n\nCongrats 🥂 https://t.co/NMtJywc0ml",
+    "created_at": "Apr 18, 14:26 AEST",
+    "likes": 60,
+    "retweets": 3,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045358229631451421"
+  },
+  {
+    "id": "2045286956712755369",
+    "text": "@SelfMadeMastery The others",
+    "created_at": "Apr 18, 09:43 AEST",
+    "likes": 5,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045286956712755369"
+  },
+  {
+    "id": "2045265413974700523",
+    "text": "@ZephsWRLD @joinautopilot Impressed so many held through the volatility 🥂",
+    "created_at": "Apr 18, 08:17 AEST",
+    "likes": 2,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045265413974700523"
+  },
+  {
+    "id": "2045223859897700815",
+    "text": "@ItsSJTrades Investors focus more on companies, traders focus more on macro",
+    "created_at": "Apr 18, 05:32 AEST",
+    "likes": 1,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045223859897700815"
+  },
+  {
+    "id": "2045215560326386060",
+    "text": "@KrisPatel99 I agree",
+    "created_at": "Apr 18, 04:59 AEST",
+    "likes": 7,
+    "retweets": 0,
+    "replies": 0,
+    "cashtags": [],
+    "url": "https://x.com/peterjwolff/status/2045215560326386060"
+  },
+  {
+    "id": "2045194545475039372",
+    "text": "Sometimes, a great trade idea &amp; thesis can take months of careful research and homework to develop.\n\nOther times, the sitting US President will Truth Social Post the opportunity for you.\n\n$PLTR turned out to be a lay up; we occasionally enjoy low hanging fruit in the funds! https://t.co/W5ANuBNTR4",
+    "created_at": "Apr 18, 03:35 AEST",
+    "likes": 27,
+    "retweets": 0,
+    "replies": 7,
+    "cashtags": [
+      "$PLTR"
+    ],
+    "url": "https://x.com/peterjwolff/status/2045194545475039372"
+  },
+  {
+    "id": "2045167508106412268",
+    "text": "$IREN\n\nIn this video, you’ll notice that regardless of the stock’s price fluctuations, the AI datacenter construction continued to consistently progress over the last few months.\n\nOn down days/weeks/months, it wasn’t because they took days off; on up days/weeks/months, it wasn’t https://t.co/BnjqKNSbQE",
+    "created_at": "Apr 18, 01:48 AEST",
+    "likes": 121,
+    "retweets": 3,
+    "replies": 9,
+    "cashtags": [
+      "$IREN"
+    ],
+    "url": "https://x.com/peterjwolff/status/2045167508106412268"
+  },
+  {
+    "id": "2044857095401750871",
+    "text": "@joinautopilot @InTheMoneyAdam $AMD has been an excellent performer since the tariff crash last year!",
+    "created_at": "Apr 17, 05:14 AEST",
+    "likes": 4,
+    "retweets": 0,
+    "replies": 1,
+    "cashtags": [
+      "$AMD"
+    ],
+    "url": "https://x.com/peterjwolff/status/2044857095401750871"
+  },
+  {
+    "id": "2044855630826274968",
+    "text": "@BitcoinAIGuy @joinautopilot $IREN remains the top individual stock position 🥂",
+    "created_at": "Apr 17, 05:09 AEST",
+    "likes": 66,
+    "retweets": 2,
+    "replies": 4,
+    "cashtags": [
+      "$IREN"
+    ],
+    "url": "https://x.com/peterjwolff/status/2044855630826274968"
+  }
+];
+
+// ── STATE ─────────────────────────────────────────────────────────────────────
+const state = {
+  s: { filter: 'all', tickerFilter: null },
+  w: { filter: 'all', tickerFilter: null }
+};
+
+// ── TABS ──────────────────────────────────────────────────────────────────────
+function showTab(id, btn) {
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// ── COMBINED ALL FEED ─────────────────────────────────────────────────────────
+const allState = { author: 'all', filter: 'all' };
+
+const ALL_TWEETS = [
+  ...SIKAND_TWEETS.map(t => ({ ...t, who: 's' })),
+  ...WOLFF_TWEETS.map(t => ({ ...t, who: 'w' }))
+].sort((a, b) => BigInt(b.id) > BigInt(a.id) ? 1 : -1);
+
+function setAuthorFilter(who) {
+  allState.author = who;
+  ['all','s','w'].forEach(k => {
+    const btn = document.getElementById('af-' + k);
+    btn.className = 'author-btn' + (k === who ? ` active-${k}` : '');
+  });
+  applyAllFilter();
+}
+
+function setAllFilter(f, btn) {
+  allState.filter = f;
+  document.querySelectorAll('#tab-all .filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  applyAllFilter();
+}
+
+function applyAllFilter() {
+  let tweets = ALL_TWEETS;
+  const search = document.getElementById('all-search').value.toLowerCase().trim();
+  if (allState.author !== 'all') tweets = tweets.filter(t => t.who === allState.author);
+  if (allState.filter === 'tickers') tweets = tweets.filter(t => t.cashtags.length > 0);
+  if (allState.filter === 'hot')     tweets = tweets.filter(t => t.likes >= 50 || t.retweets >= 5);
+  if (search) tweets = tweets.filter(t => t.text.toLowerCase().includes(search) || t.cashtags.some(c => c.toLowerCase().includes(search)));
+  renderAllGrid(tweets);
+  document.getElementById('all-count').textContent = tweets.length;
+}
+
+function renderAllGrid(tweets) {
+  const grid = document.getElementById('all-grid');
+  if (!tweets.length) { grid.innerHTML = '<div class="empty-state">No tweets match your filter.</div>'; return; }
+  const authorLabel = { s: '🦑 Sikand', w: 'Wolff' };
+  grid.innerHTML = tweets.map(t => {
+    const hot = t.likes >= 100 || t.retweets >= 10;
+    const hasTicker = t.cashtags.length > 0;
+    const borderClass = hot ? 'hot' : hasTicker ? `has-ticker ${t.who}` : '';
+    const tagsHtml = hasTicker
+      ? `<div class="tweet-cashtags">${t.cashtags.map(c => `<span class="cashtag-tag ${t.who}">${c}</span>`).join('')}</div>` : '';
+    return `<div class="tweet-card ${borderClass}" onclick="safeOpen('${t.url}')">
+      <div class="tweet-meta">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="author-badge ${t.who}">${authorLabel[t.who]}</span>
+          <span class="tweet-time">${t.created_at}</span>
+        </div>
+        <div class="eng-row">
+          <span class="eng ${t.likes>=100?'hot':''}">♥ ${t.likes.toLocaleString()}</span>
+          <span class="eng ${t.retweets>=10?'hot':''}">↻ ${t.retweets}</span>
+          <span class="eng">💬 ${t.replies}</span>
+        </div>
+      </div>
+      <div class="tweet-text">${t.text}</div>
+      ${tagsHtml}
+      <div class="tweet-footer"><a class="tweet-link" href="${t.url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View on X ↗</a></div>
+    </div>`;
+  }).join('');
+}
+
+// ── FEED LOGIC ────────────────────────────────────────────────────────────────
+function setFilter(who, f, btn) {
+  state[who].filter = f;
+  state[who].tickerFilter = null;
+  document.querySelectorAll(`#tab-${who === 's' ? 'sikand' : 'wolff'} .filter-btn`).forEach(b => b.classList.remove('active', 'wolff-active'));
+  btn.classList.add(who === 'w' ? 'wolff-active' : 'active');
+  updatePills(who);
+  applyFilter(who);
+}
+
+function setTickerFilter(who, ticker) {
+  state[who].tickerFilter = state[who].tickerFilter === ticker ? null : ticker;
+  updatePills(who);
+  applyFilter(who);
+}
+
+function applyFilter(who) {
+  const tweets = who === 's' ? SIKAND_TWEETS : WOLFF_TWEETS;
+  const search = document.getElementById(who + '-search').value.toLowerCase().trim();
+  const { filter, tickerFilter } = state[who];
+  let filtered = tweets;
+  if (filter === 'tickers') filtered = filtered.filter(t => t.cashtags.length > 0);
+  if (filter === 'hot')     filtered = filtered.filter(t => t.likes >= 50 || t.retweets >= 5);
+  if (tickerFilter)         filtered = filtered.filter(t => t.cashtags.includes(tickerFilter));
+  if (search)               filtered = filtered.filter(t => t.text.toLowerCase().includes(search) || t.cashtags.some(c => c.toLowerCase().includes(search)));
+  renderGrid(who, filtered);
+  document.getElementById(who === 's' ? 's-count' : 'w-count').textContent = filtered.length;
+}
+
+function renderGrid(who, tweets) {
+  const grid = document.getElementById(who + '-grid');
+  if (!tweets.length) { grid.innerHTML = '<div class="empty-state">No tweets match your filter.</div>'; return; }
+  grid.innerHTML = tweets.map(t => {
+    const hot = t.likes >= 100 || t.retweets >= 10;
+    const hasTicker = t.cashtags.length > 0;
+    const borderClass = hot ? 'hot' : hasTicker ? `has-ticker ${who}` : '';
+    const tagsHtml = hasTicker
+      ? `<div class="tweet-cashtags">${t.cashtags.map(c => `<span class="cashtag-tag ${who}">${c}</span>`).join('')}</div>` : '';
+    return `<div class="tweet-card ${borderClass}" onclick="safeOpen('${t.url}')">
+      <div class="tweet-meta">
+        <span class="tweet-time">${t.created_at}</span>
+        <div class="eng-row">
+          <span class="eng ${t.likes>=100?'hot':''}">♥ ${t.likes.toLocaleString()}</span>
+          <span class="eng ${t.retweets>=10?'hot':''}">↻ ${t.retweets}</span>
+          <span class="eng">💬 ${t.replies}</span>
+        </div>
+      </div>
+      <div class="tweet-text">${t.text}</div>
+      ${tagsHtml}
+      <div class="tweet-footer"><a class="tweet-link" href="${t.url}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View on X ↗</a></div>
+    </div>`;
+  }).join('');
+}
+
+function buildTickerCounts(tweets) {
+  const c = {};
+  tweets.forEach(t => t.cashtags.forEach(tag => { c[tag] = (c[tag]||0) + 1; }));
+  return c;
+}
+
+function updatePills(who) {
+  const tweets = who === 's' ? SIKAND_TWEETS : WOLFF_TWEETS;
+  const counts = buildTickerCounts(tweets);
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]);
+  const bar = document.getElementById(who + '-tickers-bar');
+  const tf = state[who].tickerFilter;
+  bar.innerHTML = `<span class="bar-label">Tickers</span>` + sorted.map(([t,n]) =>
+    `<span class="ticker-pill ${who}" style="${tf===t?`background:${who==='s'?'#4fc3f7':'#10b981'};color:#0b0e17`:''}" onclick="setTickerFilter('${who}','${t}')">${t}<span class="cnt">×${n}</span></span>`
+  ).join('');
+}
+
+// ── OVERLAP / BUBBLE CHART ─────────────────────────────────────────────────────
+function buildOverlap() {
+  const sCount = buildTickerCounts(SIKAND_TWEETS);
+  const wCount = buildTickerCounts(WOLFF_TWEETS);
+  const allTickers = new Set([...Object.keys(sCount), ...Object.keys(wCount)]);
+  const sharedTickers = [...allTickers].filter(t => sCount[t] && wCount[t]);
+
+  document.getElementById('ov-count').textContent = sharedTickers.length;
+
+  const sharedDiv = document.getElementById('shared-list');
+  if (sharedTickers.length === 0) {
+    sharedDiv.innerHTML = `<div class="no-shared">
+      <strong>No shared tickers found</strong>
+      These two run complementary portfolios — Sikand in defense & space, Wolff in tech & macro. Refresh more tweets to uncover overlap.
+    </div>`;
+  } else {
+    sharedDiv.innerHTML = sharedTickers.map(t => `
+      <div class="shared-item">
+        <div class="shared-ticker">${t}</div>
+        <div class="shared-meta">
+          <div class="by s">Sikand: <span>${sCount[t]}×</span></div>
+          <div class="by w">Wolff: <span>${wCount[t]}×</span></div>
+        </div>
+      </div>`).join('');
+  }
+
+  const bubbles = [...allTickers].map(t => {
+    const inS = !!sCount[t], inW = !!wCount[t];
+    const total = (sCount[t]||0) + (wCount[t]||0);
+    const color = (inS && inW) ? '#f59e0b' : inS ? '#4fc3f7' : '#10b981';
+    return { ticker: t, total, color, inS, inW };
+  }).sort((a,b) => b.total - a.total);
+
+  drawBubbles(bubbles);
+}
+
+function drawBubbles(bubbles) {
+  const svg = document.getElementById('bubble-svg');
+  const W = svg.parentElement.clientWidth - 40 || 600;
+  const H = 480;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.setAttribute('width', W);
+
+  const maxCount = Math.max(...bubbles.map(b => b.total));
+  const rScale = count => Math.max(18, Math.sqrt(count / maxCount) * 60);
+
+  const nodes = bubbles.map(b => ({ ...b, r: rScale(b.total), x: W/2 + (Math.random()-0.5)*100, y: H/2 + (Math.random()-0.5)*100 }));
+
+  const sim = d3.forceSimulation(nodes)
+    .force('charge', d3.forceManyBody().strength(5))
+    .force('center', d3.forceCenter(W/2, H/2))
+    .force('collision', d3.forceCollide().radius(d => d.r + 3).strength(1))
+    .force('x', d3.forceX(W/2).strength(0.05))
+    .force('y', d3.forceY(H/2).strength(0.08))
+    .stop();
+
+  for (let i = 0; i < 300; i++) sim.tick();
+
+  nodes.forEach(n => {
+    n.x = Math.max(n.r + 4, Math.min(W - n.r - 4, n.x));
+    n.y = Math.max(n.r + 4, Math.min(H - n.r - 4, n.y));
+  });
+
+  const ns = d3.create('svg').attr('xmlns','http://www.w3.org/2000/svg');
+
+  nodes.forEach(n => {
+    const g = ns.append('g').attr('transform', `translate(${n.x},${n.y})`).attr('style','cursor:pointer').attr('onclick', `safeOpen('https://finance.yahoo.com/quote/${n.ticker.replace('$','')}','https://finance.yahoo.com')`);
+    g.append('circle').attr('r', n.r).attr('fill', n.color).attr('fill-opacity', n.inS && n.inW ? 0.9 : 0.7).attr('stroke', n.color).attr('stroke-width', n.inS && n.inW ? 2.5 : 1);
+    const fontSize = n.r > 35 ? 13 : n.r > 25 ? 11 : 9;
+    g.append('text').attr('text-anchor','middle').attr('dy','0.35em').attr('font-size', fontSize).attr('font-weight','700').attr('fill', '#0b0e17').attr('font-family','SF Mono,monospace').text(n.ticker.replace('$',''));
+    if (n.total > 1 && n.r > 28) {
+      g.append('text').attr('text-anchor','middle').attr('dy', fontSize + 6).attr('font-size', 9).attr('fill','rgba(0,0,0,0.6)').text(`×${n.total}`);
+    }
+  });
+
+  svg.innerHTML = ns.node().innerHTML;
+}
+
+// ── INIT ──────────────────────────────────────────────────────────────────────
+function init() {
+  applyAllFilter();
+  updatePills('s'); applyFilter('s');
+  updatePills('w'); applyFilter('w');
+  buildOverlap();
+}
+
+init();
+</script>
+</body>
+</html>

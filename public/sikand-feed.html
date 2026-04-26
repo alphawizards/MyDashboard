@@ -1,0 +1,2959 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'unsafe-inline'; connect-src 'none'; img-src 'self' data: https://pbs.twimg.com; frame-ancestors 'none';">
+  <meta http-equiv="X-Content-Type-Options" content="nosniff">
+  <title>X Tracker — Sikand & Wolff</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0b0e17;
+      color: #e0e6ed;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    a.back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #4a5578;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    a.back-link:hover {
+      color: #4fc3f7;
+    }
+
+    /* Authors bar */
+    .authors-bar {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .author-card {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 12px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .author-card.sikand {
+      border-left: 3px solid #4fc3f7;
+    }
+
+    .author-card.wolff {
+      border-left: 3px solid #10b981;
+    }
+
+    .author-card.serenity {
+      border-left: 3px solid #a78bfa;
+    }
+
+    .author-card.bryzonx {
+      border-left: 3px solid #f43f5e;
+    }
+
+    .author-card.venu {
+      border-left: 3px solid #f59e0b;
+    }
+
+    .avatar {
+      width: 46px;
+      height: 46px;
+      border-radius: 50%;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .avatar-fallback {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #3a1a20;
+      color: #f43f5e;
+      font-weight: 800;
+    }
+
+    .author-info h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #fff;
+    }
+
+    .author-info .handle {
+      font-size: 12px;
+      color: #4a5578;
+    }
+
+    .author-info .bio {
+      font-size: 11px;
+      color: #8892a8;
+      margin-top: 3px;
+    }
+
+    .author-stats {
+      margin-left: auto;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .author-stats .followers {
+      font-size: 15px;
+      font-weight: 700;
+      color: #e0e6ed;
+    }
+
+    .author-stats .label {
+      font-size: 10px;
+      color: #4a5578;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid #2a3250;
+      padding-bottom: 0;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 10px 20px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #4a5578;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: -1px;
+    }
+
+    .tab-btn:hover {
+      color: #e0e6ed;
+    }
+
+    .tab-btn.active {
+      color: #4fc3f7;
+      border-bottom-color: #4fc3f7;
+    }
+
+    .tab-btn.wolff-tab.active {
+      color: #10b981;
+      border-bottom-color: #10b981;
+    }
+
+    .tab-btn.serenity-tab.active {
+      color: #a78bfa;
+      border-bottom-color: #a78bfa;
+    }
+
+    .tab-btn.bryzonx-tab.active {
+      color: #f43f5e;
+      border-bottom-color: #f43f5e;
+    }
+
+    .tab-btn.venu-tab.active {
+      color: #f59e0b;
+      border-bottom-color: #f59e0b;
+    }
+
+    .tab-btn .count {
+      font-size: 10px;
+      background: #1e2538;
+      border-radius: 4px;
+      padding: 1px 5px;
+      margin-left: 4px;
+      color: #8892a8;
+    }
+
+    /* Author toggle */
+    .author-toggle {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .author-btn {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #4a5578;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .author-btn:hover {
+      color: #e0e6ed;
+      border-color: #3a4a6a;
+    }
+
+    .author-btn.active-all {
+      background: #1a2038;
+      border-color: #4a5578;
+      color: #e0e6ed;
+    }
+
+    .author-btn.active-s {
+      background: #1a2a3a;
+      border-color: #4fc3f7;
+      color: #4fc3f7;
+    }
+
+    .author-btn.active-w {
+      background: #0d2a1a;
+      border-color: #10b981;
+      color: #10b981;
+    }
+
+    .author-btn.active-a {
+      background: #1a1a2e;
+      border-color: #a78bfa;
+      color: #a78bfa;
+    }
+
+    .author-btn.active-b {
+      background: #3a1a20;
+      border-color: #f43f5e;
+      color: #f43f5e;
+    }
+
+    .author-btn.active-v {
+      background: #2a200d;
+      border-color: #f59e0b;
+      color: #f59e0b;
+    }
+
+    .author-btn .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .author-btn .dot.s {
+      background: #4fc3f7;
+    }
+
+    .author-btn .dot.w {
+      background: #10b981;
+    }
+
+    .author-btn .dot.a {
+      background: #a78bfa;
+    }
+
+    .author-btn .dot.b {
+      background: #f43f5e;
+    }
+
+    .author-btn .dot.v {
+      background: #f59e0b;
+    }
+
+    .author-btn .dot.all {
+      background: linear-gradient(135deg, #4fc3f7 0 20%, #10b981 20% 40%, #a78bfa 40% 60%, #f43f5e 60% 80%, #f59e0b 80%);
+    }
+
+    /* Combined feed author badge on card */
+    .author-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 4px;
+      border: 1px solid;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .author-badge.s {
+      background: #1a2a3a;
+      border-color: #2a4a6a;
+      color: #4fc3f7;
+    }
+
+    .author-badge.w {
+      background: #0d2a1a;
+      border-color: #1a4a30;
+      color: #10b981;
+    }
+
+    .author-badge.a {
+      background: #1a1a2e;
+      border-color: #3a2e5a;
+      color: #a78bfa;
+    }
+
+    .author-badge.b {
+      background: #3a1a20;
+      border-color: #5a2e3a;
+      color: #f43f5e;
+    }
+
+    .author-badge.v {
+      background: #2a200d;
+      border-color: #4a3a1a;
+      color: #f59e0b;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* Filter bar */
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-label {
+      font-size: 12px;
+      color: #4a5578;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .filter-btn {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      color: #8892a8;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .filter-btn:hover {
+      border-color: #4fc3f7;
+      color: #4fc3f7;
+    }
+
+    .filter-btn.active {
+      background: #1a2a3a;
+      border-color: #4fc3f7;
+      color: #4fc3f7;
+      font-weight: 600;
+    }
+
+    .filter-btn.wolff-active {
+      background: #0d2a20;
+      border-color: #10b981;
+      color: #10b981;
+      font-weight: 600;
+    }
+
+    .filter-btn.serenity-active {
+      background: #1a1a2e;
+      border-color: #a78bfa;
+      color: #a78bfa;
+      font-weight: 600;
+    }
+
+    .filter-btn.bryzonx-active {
+      background: #3a1a20;
+      border-color: #f43f5e;
+      color: #f43f5e;
+      font-weight: 600;
+    }
+
+    .filter-btn.venu-active {
+      background: #2a200d;
+      border-color: #f59e0b;
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
+    .search-input {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 13px;
+      color: #e0e6ed;
+      outline: none;
+      width: 200px;
+      margin-left: auto;
+    }
+
+    .search-input:focus {
+      border-color: #4fc3f7;
+    }
+
+    .search-input::placeholder {
+      color: #4a5578;
+    }
+
+    /* Ticker bar */
+    .tickers-bar {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 10px;
+      padding: 12px 16px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      align-items: center;
+    }
+
+    .bar-label {
+      font-size: 11px;
+      color: #4a5578;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-right: 4px;
+    }
+
+    .ticker-pill {
+      border-radius: 5px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: 'SF Mono', monospace;
+      border: 1px solid;
+    }
+
+    .ticker-pill.s {
+      background: #1a2a3a;
+      border-color: #2a4a6a;
+      color: #4fc3f7;
+    }
+
+    .ticker-pill.w {
+      background: #0d2a1a;
+      border-color: #1a4a30;
+      color: #10b981;
+    }
+
+    .ticker-pill.a {
+      background: #1a1a2e;
+      border-color: #3a2e5a;
+      color: #a78bfa;
+    }
+
+    .ticker-pill.b {
+      background: #3a1a20;
+      border-color: #5a2e3a;
+      color: #f43f5e;
+    }
+
+    .ticker-pill.v {
+      background: #2a200d;
+      border-color: #4a3a1a;
+      color: #f59e0b;
+    }
+
+    .ticker-pill.shared {
+      background: #2a2a0d;
+      border-color: #4a4a1a;
+      color: #f59e0b;
+    }
+
+    .ticker-pill .cnt {
+      color: #8892a8;
+      font-weight: 400;
+      margin-left: 3px;
+      font-size: 10px;
+    }
+
+    /* Tweet grid */
+    .tweet-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 14px;
+    }
+
+    .tweet-card {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.2s, transform 0.1s;
+      cursor: pointer;
+    }
+
+    .tweet-card:hover {
+      border-color: #3a4a6a;
+      transform: translateY(-1px);
+    }
+
+    .tweet-card.has-ticker.s {
+      border-left: 3px solid #4fc3f7;
+    }
+
+    .tweet-card.has-ticker.w {
+      border-left: 3px solid #10b981;
+    }
+
+    .tweet-card.has-ticker.a {
+      border-left: 3px solid #a78bfa;
+    }
+
+    .tweet-card.has-ticker.b {
+      border-left: 3px solid #f43f5e;
+    }
+
+    .tweet-card.has-ticker.v {
+      border-left: 3px solid #f59e0b;
+    }
+
+    .tweet-card.hot {
+      border-left: 3px solid #f59e0b !important;
+    }
+
+    .tweet-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .tweet-time {
+      font-size: 11px;
+      color: #4a5578;
+    }
+
+    .eng-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .eng {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      color: #8892a8;
+    }
+
+    .eng.hot {
+      color: #f59e0b;
+    }
+
+    .tweet-text {
+      font-size: 13px;
+      line-height: 1.55;
+      color: #c8d4e3;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .tweet-cashtags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .cashtag-tag {
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 700;
+      font-family: 'SF Mono', monospace;
+      border: 1px solid;
+    }
+
+    .cashtag-tag.s {
+      background: #1a2a3a;
+      border-color: #2a4a6a;
+      color: #4fc3f7;
+    }
+
+    .cashtag-tag.w {
+      background: #0d2a1a;
+      border-color: #1a4a30;
+      color: #10b981;
+    }
+
+    .cashtag-tag.a {
+      background: #1a1a2e;
+      border-color: #3a2e5a;
+      color: #a78bfa;
+    }
+
+    .cashtag-tag.b {
+      background: #3a1a20;
+      border-color: #5a2e3a;
+      color: #f43f5e;
+    }
+
+    .cashtag-tag.v {
+      background: #2a200d;
+      border-color: #4a3a1a;
+      color: #f59e0b;
+    }
+
+    .tweet-footer {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 4px;
+      border-top: 1px solid #1e2538;
+      margin-top: auto;
+    }
+
+    .tweet-link {
+      font-size: 11px;
+      color: #4a5578;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .tweet-link:hover {
+      color: #4fc3f7;
+    }
+
+    .empty-state {
+      grid-column: 1/-1;
+      text-align: center;
+      padding: 50px;
+      color: #4a5578;
+      font-size: 13px;
+    }
+
+    /* ===== BUBBLE CHART ===== */
+    .overlap-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 20px;
+    }
+
+    .bubble-panel {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .bubble-panel h3 {
+      font-size: 14px;
+      color: #e0e6ed;
+      margin-bottom: 6px;
+    }
+
+    .bubble-panel .subtitle {
+      font-size: 12px;
+      color: #4a5578;
+      margin-bottom: 16px;
+    }
+
+    #bubble-svg {
+      width: 100%;
+      min-width: 1180px;
+      min-height: 720px;
+      display: block;
+    }
+
+    .bubble-lane-bg {
+      fill: #0f1420;
+      stroke: #1e2538;
+      stroke-width: 1;
+      opacity: 0.72;
+    }
+
+    .bubble-lane-label {
+      fill: #8892a8;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .bubble-node circle {
+      transition: opacity 0.15s, stroke-width 0.15s;
+    }
+
+    .bubble-node:hover circle {
+      opacity: 1;
+      stroke-width: 3.5;
+    }
+
+    .legend-row {
+      display: flex;
+      gap: 20px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: #8892a8;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .shared-panel {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .shared-panel h3 {
+      font-size: 14px;
+      color: #e0e6ed;
+    }
+
+    .shared-item {
+      background: #1e2538;
+      border: 1px solid #2a3a28;
+      border-radius: 8px;
+      padding: 12px 14px;
+    }
+
+    .shared-ticker {
+      font-size: 16px;
+      font-weight: 700;
+      color: #f59e0b;
+      font-family: monospace;
+    }
+
+    .shared-meta {
+      display: flex;
+      gap: 16px;
+      margin-top: 6px;
+    }
+
+    .shared-meta .by {
+      font-size: 12px;
+    }
+
+    .shared-meta .by span {
+      font-weight: 600;
+    }
+
+    .shared-meta .by.s span {
+      color: #4fc3f7;
+    }
+
+    .shared-meta .by.w span {
+      color: #10b981;
+    }
+
+    .shared-meta .by.a span {
+      color: #a78bfa;
+    }
+
+    .shared-meta .by.b span {
+      color: #f43f5e;
+    }
+
+    .no-shared {
+      text-align: center;
+      padding: 30px 16px;
+      color: #4a5578;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .no-shared strong {
+      color: #8892a8;
+      display: block;
+      margin-bottom: 4px;
+      font-size: 14px;
+    }
+
+    .sector-breakdown {
+      background: #0f1420;
+      border: 1px solid #1e2538;
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .sector-breakdown .sec-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #4a5578;
+      margin-bottom: 8px;
+    }
+
+    .sector-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 4px;
+      color: #8892a8;
+    }
+
+    .sector-row .sec-name {
+      color: #c8d4e3;
+    }
+
+    .refresh-note-small {
+      font-size: 11px;
+      color: #4a5578;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* ===== PORTFOLIOS ===== */
+    .portfolio-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(280px, 0.8fr);
+      gap: 20px;
+    }
+
+    .portfolio-panel,
+    .portfolio-summary-panel {
+      background: #161b2e;
+      border: 1px solid #2a3250;
+      border-radius: 12px;
+      padding: 20px;
+    }
+
+    .portfolio-panel h3,
+    .portfolio-summary-panel h3 {
+      font-size: 14px;
+      color: #e0e6ed;
+      margin-bottom: 6px;
+    }
+
+    .portfolio-subtitle {
+      font-size: 12px;
+      color: #4a5578;
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .portfolio-account-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+    }
+
+    .portfolio-account {
+      background: #0f1420;
+      border: 1px solid #1e2538;
+      border-radius: 10px;
+      padding: 16px;
+    }
+
+    .portfolio-account.sikand {
+      border-left: 3px solid #4fc3f7;
+    }
+
+    .portfolio-account.wolff {
+      border-left: 3px solid #10b981;
+    }
+
+    .portfolio-account.wolff .portfolio-total {
+      color: #10b981;
+      background: #0d2a1a;
+      border-color: #1a4a30;
+    }
+
+    .portfolio-account.wolff .holding-fill {
+      background: linear-gradient(90deg, #10b981, #4fc3f7);
+    }
+
+    .portfolio-account.venu {
+      border-left: 3px solid #f59e0b;
+    }
+
+    .portfolio-account.venu .portfolio-total {
+      color: #f59e0b;
+      background: #2a200d;
+      border-color: #4a3a1a;
+    }
+
+    .portfolio-account.empty {
+      opacity: 0.74;
+    }
+
+    .portfolio-account-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .portfolio-account-name {
+      font-size: 15px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .portfolio-account-meta {
+      font-size: 11px;
+      color: #8892a8;
+      margin-top: 3px;
+    }
+
+    .portfolio-total {
+      font-size: 11px;
+      color: #4fc3f7;
+      background: #1a2a3a;
+      border: 1px solid #2a4a6a;
+      border-radius: 999px;
+      padding: 4px 8px;
+      white-space: nowrap;
+    }
+
+    .holding-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .holding-row {
+      display: grid;
+      grid-template-columns: 64px 1fr 44px;
+      gap: 12px;
+      align-items: center;
+      background: #161b2e;
+      border: 1px solid #1e2538;
+      border-radius: 8px;
+      padding: 10px 12px;
+    }
+
+    .holding-ticker {
+      font-size: 14px;
+      font-weight: 800;
+      color: #e0e6ed;
+      font-family: 'SF Mono', monospace;
+    }
+
+    .holding-bar {
+      height: 8px;
+      background: #0b0e17;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .holding-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #4fc3f7, #a78bfa);
+      border-radius: inherit;
+    }
+
+    .holding-weight {
+      text-align: right;
+      font-size: 13px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .portfolio-note {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid #1e2538;
+      font-size: 12px;
+      color: #8892a8;
+      line-height: 1.55;
+    }
+
+    .portfolio-empty-message {
+      font-size: 12px;
+      color: #8892a8;
+      line-height: 1.55;
+    }
+
+    .portfolio-metric {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #1e2538;
+      font-size: 12px;
+      color: #8892a8;
+    }
+
+    .portfolio-metric:last-child {
+      border-bottom: none;
+    }
+
+    .portfolio-metric strong {
+      color: #e0e6ed;
+      font-family: 'SF Mono', monospace;
+    }
+
+    @media (max-width: 900px) {
+      .authors-bar {
+        grid-template-columns: 1fr;
+      }
+
+      .overlap-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .portfolio-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <a href="morning-watchlist.html" class="back-link">← Back to Watchlist</a>
+
+  <!-- Author Cards -->
+  <div class="authors-bar">
+    <div class="author-card sikand">
+      <img class="avatar" src="https://pbs.twimg.com/profile_images/1536185134684119040/X0UukfQa_normal.jpg"
+        alt="Sikand" onerror="this.style.display='none'">
+      <div class="author-info">
+        <h2>Michael Sikand 🦑</h2>
+        <div class="handle">@michaelsikand</div>
+        <div class="bio">Investor · $17M AUM @joinautopilot · Forbes 30u30 · Defense & Space focus</div>
+      </div>
+      <div class="author-stats">
+        <div class="followers">63,446</div>
+        <div class="label">followers</div>
+      </div>
+    </div>
+    <div class="author-card wolff">
+      <img class="avatar" src="https://pbs.twimg.com/profile_images/1588706338443431936/ZKGkvq8P_normal.jpg" alt="Wolff"
+        onerror="this.style.display='none'">
+      <div class="author-info">
+        <h2>Peter Wolff</h2>
+        <div class="handle">@peterjwolff</div>
+        <div class="bio">Dermatology NP · $140M AUM @joinautopilot · Tech / Macro / Precious metals</div>
+      </div>
+      <div class="author-stats">
+        <div class="followers">15,334</div>
+        <div class="label">followers</div>
+      </div>
+    </div>
+    <div class="author-card serenity">
+      <img class="avatar" src="https://pbs.twimg.com/profile_images/1996176688414367744/LXfA_lIx_normal.jpg"
+        alt="Serenity" onerror="this.style.display='none'">
+      <div class="author-info">
+        <h2>Serenity</h2>
+        <div class="handle">@aleabitoreddit</div>
+        <div class="bio">Ex-Reddit WSB trader · AI / Semi supply-chain analyst · ex RISC-V FDN / AI research</div>
+      </div>
+      <div class="author-stats">
+        <div class="followers">224,473</div>
+        <div class="label">followers</div>
+      </div>
+    </div>
+    <div class="author-card bryzonx">
+      <div class="avatar avatar-fallback" aria-hidden="true">BX</div>
+      <div class="author-info">
+        <h2>BryzonX</h2>
+        <div class="handle">@BryzonX</div>
+        <div class="bio">Trader / Analyst</div>
+      </div>
+      <div class="author-stats">
+        <div class="followers">N/A</div>
+        <div class="label">followers</div>
+      </div>
+    </div>
+    <div class="author-card venu">
+      <img class="avatar" src="https://pbs.twimg.com/profile_images/1990648718882910208/ZguIUF9X_normal.jpg"
+        alt="Venu" onerror="this.style.display='none'">
+      <div class="author-info">
+        <h2>Venu</h2>
+        <div class="handle">@Venu_7_</div>
+        <div class="bio">Research-driven thematic investor & swing trader · Semiconductor stage-base watchlists</div>
+      </div>
+      <div class="author-stats">
+        <div class="followers">35,204</div>
+        <div class="label">followers</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('all', this)">📋 All Feed <span class="count"
+        id="all-count">97</span></button>
+    <button class="tab-btn" onclick="showTab('sikand', this)">🦑 Sikand <span class="count"
+        id="s-count">20</span></button>
+    <button class="tab-btn wolff-tab" onclick="showTab('wolff', this)">Peter Wolff <span class="count"
+        id="w-count">20</span></button>
+    <button class="tab-btn serenity-tab" onclick="showTab('serenity', this)">🧘 Serenity <span class="count"
+        id="a-count">20</span></button>
+    <button class="tab-btn bryzonx-tab" onclick="showTab('bryzonx', this)">📈 BryzonX <span class="count"
+        id="b-count">19</span></button>
+    <button class="tab-btn venu-tab" onclick="showTab('venu', this)">Venu <span class="count"
+        id="v-count">18</span></button>
+    <button class="tab-btn" onclick="showTab('overlap', this)">🫧 Overlap <span class="count"
+        id="ov-count">6</span></button>
+    <button class="tab-btn" onclick="showTab('portfolio', this)">Portfolio <span class="count">2</span></button>
+  </div>
+
+  <!-- ALL FEED TAB -->
+  <div id="tab-all" class="tab-pane active">
+    <div class="filter-bar">
+      <div class="author-toggle">
+        <button class="author-btn active-all" id="af-all" onclick="setAuthorFilter('all')">
+          <span class="dot all"></span> All
+        </button>
+        <button class="author-btn" id="af-s" onclick="setAuthorFilter('s')">
+          <span class="dot s"></span> Sikand
+        </button>
+        <button class="author-btn" id="af-w" onclick="setAuthorFilter('w')">
+          <span class="dot w"></span> Wolff
+        </button>
+        <button class="author-btn" id="af-a" onclick="setAuthorFilter('a')">
+          <span class="dot a"></span> Serenity
+        </button>
+        <button class="author-btn" id="af-b" onclick="setAuthorFilter('b')">
+          <span class="dot b"></span> BryzonX
+        </button>
+        <button class="author-btn" id="af-v" onclick="setAuthorFilter('v')">
+          <span class="dot v"></span> Venu
+        </button>
+      </div>
+      <button class="filter-btn active" id="af-filter-all" onclick="setAllFilter('all',this)">All</button>
+      <button class="filter-btn" onclick="setAllFilter('tickers',this)">Stock Mentions</button>
+      <button class="filter-btn" onclick="setAllFilter('hot',this)">🔥 Hot</button>
+      <input class="search-input" id="all-search" placeholder="Search or $TICKER…" oninput="applyAllFilter()">
+    </div>
+    <div class="tweet-grid" id="all-grid"></div>
+  </div>
+
+  <!-- SIKAND TAB -->
+  <div id="tab-sikand" class="tab-pane">
+    <div class="filter-bar">
+      <span class="filter-label">Filter</span>
+      <button class="filter-btn active" onclick="setFilter('s','all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('s','tickers',this)">Stock Mentions</button>
+      <button class="filter-btn" onclick="setFilter('s','hot',this)">🔥 Hot</button>
+      <input class="search-input" id="s-search" placeholder="Search or $TICKER…" oninput="applyFilter('s')">
+    </div>
+    <div class="tickers-bar" id="s-tickers-bar"><span class="bar-label">Tickers</span></div>
+    <div class="tweet-grid" id="s-grid"></div>
+  </div>
+
+  <!-- WOLFF TAB -->
+  <div id="tab-wolff" class="tab-pane">
+    <div class="filter-bar">
+      <span class="filter-label">Filter</span>
+      <button class="filter-btn active" onclick="setFilter('w','all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('w','tickers',this)">Stock Mentions</button>
+      <button class="filter-btn" onclick="setFilter('w','hot',this)">🔥 Hot</button>
+      <input class="search-input" id="w-search" placeholder="Search or $TICKER…" oninput="applyFilter('w')">
+    </div>
+    <div class="tickers-bar" id="w-tickers-bar"><span class="bar-label">Tickers</span></div>
+    <div class="tweet-grid" id="w-grid"></div>
+  </div>
+
+  <!-- SERENITY TAB -->
+  <div id="tab-serenity" class="tab-pane">
+    <div class="filter-bar">
+      <span class="filter-label">Filter</span>
+      <button class="filter-btn active" onclick="setFilter('a','all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('a','tickers',this)">Stock Mentions</button>
+      <button class="filter-btn" onclick="setFilter('a','hot',this)">🔥 Hot</button>
+      <input class="search-input" id="a-search" placeholder="Search or $TICKER…" oninput="applyFilter('a')">
+    </div>
+    <div class="tickers-bar" id="a-tickers-bar"><span class="bar-label">Tickers</span></div>
+    <div class="tweet-grid" id="a-grid"></div>
+  </div>
+
+  <!-- BRYZONX TAB -->
+  <div id="tab-bryzonx" class="tab-pane">
+    <div class="filter-bar">
+      <span class="filter-label">Filter</span>
+      <button class="filter-btn active" onclick="setFilter('b','all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('b','tickers',this)">Stock Mentions</button>
+      <button class="filter-btn" onclick="setFilter('b','hot',this)">🔥 Hot</button>
+      <input class="search-input" id="b-search" placeholder="Search or $TICKER…" oninput="applyFilter('b')">
+    </div>
+    <div class="tickers-bar" id="b-tickers-bar"><span class="bar-label">Tickers</span></div>
+    <div class="tweet-grid" id="b-grid"></div>
+  </div>
+
+  <!-- VENU TAB -->
+  <div id="tab-venu" class="tab-pane">
+    <div class="filter-bar">
+      <span class="filter-label">Filter</span>
+      <button class="filter-btn active" onclick="setFilter('v','all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('v','tickers',this)">Stock Mentions</button>
+      <button class="filter-btn" onclick="setFilter('v','hot',this)">🔥 Hot</button>
+      <input class="search-input" id="v-search" placeholder="Search or $TICKER…" oninput="applyFilter('v')">
+    </div>
+    <div class="tickers-bar" id="v-tickers-bar"><span class="bar-label">Tickers</span></div>
+    <div class="tweet-grid" id="v-grid"></div>
+  </div>
+
+  <!-- OVERLAP TAB -->
+  <div id="tab-overlap" class="tab-pane">
+    <div class="overlap-layout">
+      <div class="bubble-panel">
+        <h3>Ticker Mention Map</h3>
+        <p class="subtitle">Grouped by account. Gold lane = mentioned by multiple accounts; bubble size = total mentions.</p>
+        <div class="legend-row">
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#4fc3f7"></div> Sikand
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#10b981"></div> Wolff
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#a78bfa"></div> Serenity
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#f43f5e"></div> BryzonX
+          </div>
+          <div class="legend-item">
+            <div class="legend-dot" style="background:#f59e0b"></div> Shared
+          </div>
+        </div>
+        <svg id="bubble-svg" height="480"></svg>
+      </div>
+      <div class="shared-panel">
+        <h3>🎯 Shared Tickers</h3>
+        <div id="shared-list"></div>
+        <div class="sector-breakdown" style="margin-top:8px">
+          <div class="sec-label">Sikand focus areas</div>
+          <div class="sector-row"><span class="sec-name">Defense / Drones</span><span>$AVEX, $RCAT, $DPRO…</span></div>
+          <div class="sector-row"><span class="sec-name">Space</span><span>$FLY, $BKSY…</span></div>
+          <div class="sector-row"><span class="sec-name">Critical Minerals</span><span>$USAR, $UUUU…</span></div>
+        </div>
+        <div class="sector-breakdown">
+          <div class="sec-label">Wolff focus areas</div>
+          <div class="sector-row"><span class="sec-name">AI / Datacenters</span><span>$NBIS, $IREN…</span></div>
+          <div class="sector-row"><span class="sec-name">Big Tech</span><span>$META, $AMZN, $MSFT</span></div>
+          <div class="sector-row"><span class="sec-name">Macro / Metals</span><span>$GLTR, $SGOV</span></div>
+        </div>
+        <div class="refresh-note-small">Fetched 2026-04-25 13:57 AEST</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PORTFOLIO TAB -->
+  <div id="tab-portfolio" class="tab-pane">
+    <div class="portfolio-layout">
+      <div class="portfolio-panel">
+        <h3>Tracked Account Portfolios</h3>
+        <p class="portfolio-subtitle">Known holdings for the major X accounts followed on this dashboard. Sikand's Asymmetric Bets portfolio is captured from the provided reference screenshot.</p>
+
+        <div class="portfolio-account-grid">
+          <section class="portfolio-account sikand">
+            <div class="portfolio-account-header">
+              <div>
+                <div class="portfolio-account-name">Michael Sikand</div>
+                <div class="portfolio-account-meta">Asymmetric Bets - current holdings</div>
+              </div>
+              <div class="portfolio-total">6 holdings</div>
+            </div>
+
+            <div class="holding-list">
+              <div class="holding-row">
+                <div class="holding-ticker">VIAV</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 27%"></div></div>
+                <div class="holding-weight">27%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">MU</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 17%"></div></div>
+                <div class="holding-weight">17%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">AVEX</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 16%"></div></div>
+                <div class="holding-weight">16%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">BE</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 14%"></div></div>
+                <div class="holding-weight">14%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">AAOI</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 13%"></div></div>
+                <div class="holding-weight">13%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">FLY</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 13%"></div></div>
+                <div class="holding-weight">13%</div>
+              </div>
+            </div>
+
+            <div class="portfolio-note">Source: user-provided Asymmetric Bets screenshot. Weights sum to 100%.</div>
+          </section>
+
+          <section class="portfolio-account wolff">
+            <div class="portfolio-account-header">
+              <div>
+                <div class="portfolio-account-name">Peter Wolff</div>
+                <div class="portfolio-account-meta">Wolff's Flagship Fund - current holdings</div>
+              </div>
+              <div class="portfolio-total">20 holdings</div>
+            </div>
+
+            <div class="holding-list">
+              <div class="holding-row">
+                <div class="holding-ticker">SGOV</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">10%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">GLTR</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 9%"></div></div>
+                <div class="holding-weight">9%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">IREN</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 9%"></div></div>
+                <div class="holding-weight">9%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">CIFR</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 7%"></div></div>
+                <div class="holding-weight">7%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">MSFT</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 6%"></div></div>
+                <div class="holding-weight">6%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">META</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 6%"></div></div>
+                <div class="holding-weight">6%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">AMZN</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 5%"></div></div>
+                <div class="holding-weight">5%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">WULF</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 5%"></div></div>
+                <div class="holding-weight">5%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">ELV</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">AVGO</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">NBIS</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">GRAB</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">MELI</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">LLY</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">BN</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">NVDA</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">AMD</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 4%"></div></div>
+                <div class="holding-weight">4%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">PLTR</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 3%"></div></div>
+                <div class="holding-weight">3%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">MCO</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 3%"></div></div>
+                <div class="holding-weight">3%</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">REGN</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 3%"></div></div>
+                <div class="holding-weight">3%</div>
+              </div>
+            </div>
+
+            <div class="portfolio-note">Source: user-provided Wolff's Flagship Fund screenshots. Displayed weights are rounded by the source app.</div>
+          </section>
+
+          <section class="portfolio-account empty">
+            <div class="portfolio-account-header">
+              <div>
+                <div class="portfolio-account-name">Serenity</div>
+                <div class="portfolio-account-meta">@aleabitoreddit</div>
+              </div>
+              <div class="portfolio-total">pending</div>
+            </div>
+            <p class="portfolio-empty-message">Portfolio holdings not captured yet. This section is ready for Serenity's current allocation.</p>
+          </section>
+
+          <section class="portfolio-account empty">
+            <div class="portfolio-account-header">
+              <div>
+                <div class="portfolio-account-name">BryzonX</div>
+                <div class="portfolio-account-meta">@BryzonX</div>
+              </div>
+              <div class="portfolio-total">pending</div>
+            </div>
+            <p class="portfolio-empty-message">Portfolio holdings not captured yet. This section is ready for BryzonX allocation data.</p>
+          </section>
+
+          <section class="portfolio-account venu">
+            <div class="portfolio-account-header">
+              <div>
+                <div class="portfolio-account-name">Venu</div>
+                <div class="portfolio-account-meta">Semiconductor Stage 1 base watchlist</div>
+              </div>
+              <div class="portfolio-total">10 names</div>
+            </div>
+
+            <div class="holding-list">
+              <div class="holding-row">
+                <div class="holding-ticker">ENTG</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">ICHR</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">PENG</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">NVTS</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">AOSL</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">SYNA</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">CRDO</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">GFS</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">PLAB</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+              <div class="holding-row">
+                <div class="holding-ticker">COHU</div>
+                <div class="holding-bar"><div class="holding-fill" style="width: 10%"></div></div>
+                <div class="holding-weight">watch</div>
+              </div>
+            </div>
+
+            <div class="portfolio-note">
+              Source: user-provided screenshots from Venu's semiconductor Stage 1 base thread. This is a watchlist, not a weighted portfolio. <a class="tweet-link" href="https://x.com/venu_7_/status/2048078874559611109" target="_blank" rel="noopener noreferrer">Open source thread</a>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <aside class="portfolio-summary-panel">
+        <h3>Sikand Allocation</h3>
+        <p class="portfolio-subtitle">Largest weights from the Asymmetric Bets portfolio.</p>
+        <div class="portfolio-metric"><span>Top holding</span><strong>VIAV 27%</strong></div>
+        <div class="portfolio-metric"><span>Semiconductor exposure</span><strong>VIAV / MU / AAOI</strong></div>
+        <div class="portfolio-metric"><span>Defense / aviation exposure</span><strong>AVEX / FLY</strong></div>
+        <div class="portfolio-metric"><span>Cash / residual</span><strong>0%</strong></div>
+        <div class="portfolio-metric"><span>Wolff top holding</span><strong>SGOV 10%</strong></div>
+        <div class="portfolio-metric"><span>Wolff AI / compute</span><strong>IREN / CIFR / NBIS</strong></div>
+        <div class="portfolio-metric"><span>Wolff megacap tech</span><strong>MSFT / META / AMZN</strong></div>
+        <div class="portfolio-metric"><span>Venu semis watchlist</span><strong>10 names</strong></div>
+        <div class="portfolio-metric"><span>Venu breakout overlap</span><strong>PENG / SYNA / CRDO</strong></div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // Safe URL opener — only allows x.com and finance.yahoo.com origins.
+    // Uses the modern window.open(url, _blank, noopener) form: browsers strip
+    // the opener reference automatically and are less likely to popup-block this
+    // than the legacy open('', _blank) + set-location pattern.
+    function safeOpen(url) {
+      try {
+        const parsed = new URL(url);
+        const allowed = ['https://x.com', 'https://twitter.com', 'https://finance.yahoo.com'];
+        if (!allowed.includes(parsed.origin)) return;
+        window.open(parsed.href, '_blank', 'noopener,noreferrer');
+      } catch (e) { /* invalid URL — do nothing */ }
+    }
+
+    // ── DATA ─────────────────────────────────────────────────────────────────────
+
+    const SIKAND_TWEETS = [
+      {
+        "id": "2047777599334580626",
+        "text": "Woah.\n\nMy photonics fund on @joinautopilot now has over $10M AUM.\n\nSince Iran, the fund is up 47.8% vs. 2.2% for the S&amp;P with AUM growing 4000%.\n\n99% of people will NEVER pick individual stocks.\n\nAutopilot is forever disrupting the multi-trillion dollar ETF industry... https://t.co/QEehYpMBmW",
+        "created_at": "Apr 25, 06:40 AEST",
+        "likes": 11,
+        "retweets": 0,
+        "replies": 3,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047777599334580626"
+      },
+      {
+        "id": "2047776487051497518",
+        "text": "@damndanielsa I love Avex",
+        "created_at": "Apr 25, 06:35 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047776487051497518"
+      },
+      {
+        "id": "2047762110336348551",
+        "text": "This Anduril competitor $AVEX is still my favorite public drone stock even though I'm bagged 11%.\n\nhttps://t.co/93VQXemFef",
+        "created_at": "Apr 25, 05:38 AEST",
+        "likes": 12,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [
+          "$AVEX"
+        ],
+        "url": "https://x.com/michaelsikand/status/2047762110336348551"
+      },
+      {
+        "id": "2047761714423513122",
+        "text": "@realstockfox tons of buying opportunities in defense.",
+        "created_at": "Apr 25, 05:36 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047761714423513122"
+      },
+      {
+        "id": "2047761593241567452",
+        "text": "@MoonShotMarty defense supercycle is so undeniable.",
+        "created_at": "Apr 25, 05:36 AEST",
+        "likes": 5,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047761593241567452"
+      },
+      {
+        "id": "2047757991597023294",
+        "text": "If Anduril was public, the stock would be getting smoked rn. \n\nHow utterly insane does that sound? https://t.co/85ITe5oBdD",
+        "created_at": "Apr 25, 05:22 AEST",
+        "likes": 55,
+        "retweets": 4,
+        "replies": 19,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047757991597023294"
+      },
+      {
+        "id": "2047722079060206015",
+        "text": "@JDPunkin yeah they got cooked rotating with me",
+        "created_at": "Apr 25, 02:59 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047722079060206015"
+      },
+      {
+        "id": "2047722009887637787",
+        "text": "@bclay3984 there are many, like earnings, orders from navies etc.",
+        "created_at": "Apr 25, 02:59 AEST",
+        "likes": 3,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047722009887637787"
+      },
+      {
+        "id": "2047721911850070513",
+        "text": "@Tanr45 high roller",
+        "created_at": "Apr 25, 02:58 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047721911850070513"
+      },
+      {
+        "id": "2047717588416016527",
+        "text": "Sounds like the average American missed photonics? https://t.co/fVFruF3GQY",
+        "created_at": "Apr 25, 02:41 AEST",
+        "likes": 102,
+        "retweets": 0,
+        "replies": 15,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047717588416016527"
+      },
+      {
+        "id": "2047716421325688989",
+        "text": "@JasonSa31374445 TARP came out with a modest profit/breakeven.",
+        "created_at": "Apr 25, 02:36 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047716421325688989"
+      },
+      {
+        "id": "2047707901373124907",
+        "text": "I usually make money in America and spend it in Europe.\n\nThis week was different. \n\nSince we called the Euro AI rotation last week.\n\n$SOI +15% $AIXA +9% $LPKF +19%\n\nVs. $LITE -0.73%, $AAOI -1.2% $COHR -1.4% https://t.co/nphNvJ8AQS",
+        "created_at": "Apr 25, 02:03 AEST",
+        "likes": 69,
+        "retweets": 1,
+        "replies": 15,
+        "cashtags": [
+          "$SOI",
+          "$AIXA",
+          "$LPKF",
+          "$LITE",
+          "$AAOI",
+          "$COHR"
+        ],
+        "url": "https://x.com/michaelsikand/status/2047707901373124907"
+      },
+      {
+        "id": "2047471570847924292",
+        "text": "This is crazy.\n\nTrump just became the first U.S. President to make taxpayers multi-bagger returns.\n\n$INTC is up 20% today on a major beat. Trump turned $9B into $33B in 8 months, up 290%.\n\nThe previous record for a federal equity stake was Citigroup after 2008 (+27%). https://t.co/EW74T2t91i https://t.co/tg3GhCYndj",
+        "created_at": "Apr 24, 10:23 AEST",
+        "likes": 148,
+        "retweets": 5,
+        "replies": 11,
+        "cashtags": [
+          "$INTC"
+        ],
+        "url": "https://x.com/michaelsikand/status/2047471570847924292"
+      },
+      {
+        "id": "2047448459217944811",
+        "text": "@cmsinvests https://t.co/Kqylhp4V48",
+        "created_at": "Apr 24, 08:52 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047448459217944811"
+      },
+      {
+        "id": "2047438271136043057",
+        "text": "The market still sees $FLY as a space stock.\n\nI see it as an orbital defense powerhouse with a lunar economy and launch lottery ticket.\n\nI've been geeking on defense since the $1.5T budget dropped. \n\n$FLY looks perfectly positioned for two massive line items.\n\nGolden Dome has https://t.co/8xssVRu8sY",
+        "created_at": "Apr 24, 08:11 AEST",
+        "likes": 144,
+        "retweets": 14,
+        "replies": 12,
+        "cashtags": [
+          "$FLY",
+          "$FLY"
+        ],
+        "url": "https://x.com/michaelsikand/status/2047438271136043057"
+      },
+      {
+        "id": "2047409779384160576",
+        "text": "@PepInvestStocks fohsho!",
+        "created_at": "Apr 24, 06:18 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047409779384160576"
+      },
+      {
+        "id": "2047405873291759992",
+        "text": "@Santosha22x https://t.co/4u10OgZyhN",
+        "created_at": "Apr 24, 06:02 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047405873291759992"
+      },
+      {
+        "id": "2047405696644464967",
+        "text": "@bobby128482 To be totally honest with you I don't have that single stock conviction where I'd buy a LEAP on any one at this time. Sometimes those ideas come where you want to go hard and really know what the market doesn't. Makes sense to use leverage there.",
+        "created_at": "Apr 24, 06:02 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047405696644464967"
+      },
+      {
+        "id": "2047403877277049275",
+        "text": "@bobby128482 I like options when you make money on them with IV expansion. This was great with EWY earlier in the year. So you find options for stocks the market isn't attributing vol too when they should be ig.",
+        "created_at": "Apr 24, 05:54 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047403877277049275"
+      },
+      {
+        "id": "2047401324816613655",
+        "text": "@bobby128482 I mostly just run concentrated equity positions. It's so simple that way. I don't get crushed on spreads or have to wait for limits, nor do I get raped during the Iran War volatility. LEAPS make sense in some cases though.",
+        "created_at": "Apr 24, 05:44 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/michaelsikand/status/2047401324816613655"
+      }
+    ];
+
+    const WOLFF_TWEETS = [
+      {
+        "id": "2047735462383812709",
+        "text": "@kryptosopus @joinautopilot Thanks to strategic trims based on macro/technicals data, we continued raising our cash equivalent allocations into this last crisis.\n\nHighest point was 27% $SGOV until conditions started turning around.\n\nNot perfect, but better than many other high risk strategies",
+        "created_at": "Apr 25, 03:52 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [
+          "$SGOV"
+        ],
+        "url": "https://x.com/peterjwolff/status/2047735462383812709"
+      },
+      {
+        "id": "2047732481043091549",
+        "text": "@btconly007 @joinautopilot Still bullish 🥂",
+        "created_at": "Apr 25, 03:40 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047732481043091549"
+      },
+      {
+        "id": "2047732407693181026",
+        "text": "@Carterstrick96 @joinautopilot Thank you 🥂",
+        "created_at": "Apr 25, 03:40 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047732407693181026"
+      },
+      {
+        "id": "2047730846384406955",
+        "text": "@crypt0CG @joinautopilot In most brokerages yes. In some, I believe you have to approve the trades when they’re placed. \n\nNot sure on which is which, but I’d recommend reaching out to autopilot support for more details if you’re interested!",
+        "created_at": "Apr 25, 03:34 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047730846384406955"
+      },
+      {
+        "id": "2047729929161441699",
+        "text": "@JasonRodlund Welcome aboard 🥂",
+        "created_at": "Apr 25, 03:30 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047729929161441699"
+      },
+      {
+        "id": "2047729713599365211",
+        "text": "@clankslop Big numbers! 🥂",
+        "created_at": "Apr 25, 03:29 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047729713599365211"
+      },
+      {
+        "id": "2047729469008519657",
+        "text": "@burrytracker 🥂",
+        "created_at": "Apr 25, 03:28 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047729469008519657"
+      },
+      {
+        "id": "2047717599505768913",
+        "text": "@btconly007 We’ve been accumulating both since early 2025 🥂",
+        "created_at": "Apr 25, 02:41 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047717599505768913"
+      },
+      {
+        "id": "2047717032687526251",
+        "text": "@BennyJ503 Thank you Ben 🥂",
+        "created_at": "Apr 25, 02:39 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047717032687526251"
+      },
+      {
+        "id": "2047716897358307652",
+        "text": "@AlbertDzurka 🥂",
+        "created_at": "Apr 25, 02:38 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047716897358307652"
+      },
+      {
+        "id": "2047716467999990004",
+        "text": "Wolff's Flagship Fund was launched in December 2024 with less than $10,000 in invested capital to start.\n\nToday, less than a year and a half later, this fund has passed $150M.\n\nWith wildly successful politician trackers and an expanding list of outperforming pilots, https://t.co/3vSnBaaml0",
+        "created_at": "Apr 25, 02:37 AEST",
+        "likes": 62,
+        "retweets": 3,
+        "replies": 9,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047716467999990004"
+      },
+      {
+        "id": "2047709091389387213",
+        "text": "Trimmed some of these incredible $AMD profits across Autopilot accounts this morning and reallocated most of these gains to undervalued $META and $MSFT positions. https://t.co/v4u3YMiDZz",
+        "created_at": "Apr 25, 02:07 AEST",
+        "likes": 94,
+        "retweets": 3,
+        "replies": 9,
+        "cashtags": [
+          "$AMD",
+          "$META",
+          "$MSFT"
+        ],
+        "url": "https://x.com/peterjwolff/status/2047709091389387213"
+      },
+      {
+        "id": "2047349156273135982",
+        "text": "RT @joinautopilot: Two whales are going band for band🐋\n\nSomeone just invested $305,057 into @michaelsikand's Photonics is Next portfolio\n\nT…",
+        "created_at": "Apr 24, 02:17 AEST",
+        "likes": 0,
+        "retweets": 2,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047349156273135982"
+      },
+      {
+        "id": "2047118699442917541",
+        "text": "@abeberg_ It was a good FAQ!\n\nI’m looking forward to this event too; you’ll probably notice that I sound very much how I write on my Substack.\n\nLooking forward to meeting some of my long term investors next week!",
+        "created_at": "Apr 23, 11:01 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047118699442917541"
+      },
+      {
+        "id": "2047085775876207091",
+        "text": "@Brandonkujo Not financial advice, but I like that interpretation too! 🥂",
+        "created_at": "Apr 23, 08:50 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047085775876207091"
+      },
+      {
+        "id": "2047046440300732793",
+        "text": "@BarkerboyGaming Happy to hear it, welcome aboard 🥂 I’m excited for the future too!",
+        "created_at": "Apr 23, 06:14 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047046440300732793"
+      },
+      {
+        "id": "2047044289797267782",
+        "text": "Interestingly enough, those “this is a scam” messages have completely stopped over the last couple weeks.\n\nAs I wrote in my letter to frustrated investors, I still highly recommend those individuals to seek counsel with their RIA and to use these rallies to rotate into https://t.co/8JNn9LenAK",
+        "created_at": "Apr 23, 06:06 AEST",
+        "likes": 12,
+        "retweets": 0,
+        "replies": 9,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2047044289797267782"
+      },
+      {
+        "id": "2047039326299820313",
+        "text": "Thank you @LisaSu for navigating the company through a year where high level execution was critical!\n\nMany didn’t believe $AMD would outperform when their share price was in the low $100’s! https://t.co/v4u3YMiDZz",
+        "created_at": "Apr 23, 05:46 AEST",
+        "likes": 36,
+        "retweets": 1,
+        "replies": 6,
+        "cashtags": [
+          "$AMD"
+        ],
+        "url": "https://x.com/peterjwolff/status/2047039326299820313"
+      },
+      {
+        "id": "2046996231457763645",
+        "text": "Be careful trusting all your BREAKING 🚨 bear market information sources on social media.\n\nThanks for calling it out @LynAldenContact https://t.co/kA4M32niW2",
+        "created_at": "Apr 23, 02:55 AEST",
+        "likes": 29,
+        "retweets": 2,
+        "replies": 3,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2046996231457763645"
+      },
+      {
+        "id": "2046792318691471767",
+        "text": "@DGretta_Author Bear markets are the worst!",
+        "created_at": "Apr 22, 13:24 AEST",
+        "likes": 4,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/peterjwolff/status/2046792318691471767"
+      }
+    ];
+
+    const SERENITY_TWEETS = [
+      {
+        "id": "2047762479917482350",
+        "text": "@hamza_hsn Oh nice! What positions did you end up taking",
+        "created_at": "Apr 25, 05:39 AEST",
+        "likes": 8,
+        "retweets": 0,
+        "replies": 4,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047762479917482350"
+      },
+      {
+        "id": "2047733429199106486",
+        "text": "@Minnvestor It’s true. I don’t think US completely mapped out all the upstream chokepoints yet.\n\nWhich is why China was still able to acquire different monopolies required by US hyperscalers and steal IP over time.\n\nRetail ownership is a great way to prevent hostile takeovers and control",
+        "created_at": "Apr 25, 03:44 AEST",
+        "likes": 139,
+        "retweets": 2,
+        "replies": 7,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047733429199106486"
+      },
+      {
+        "id": "2047732066603942395",
+        "text": "@Yolo365247isme I do have $AMSC and $PLPC as the executive order beneficiaries as well but not as high conviction. \n\nI mean AMSC is up 8.58% and PLPC is up 6.37% today, they don’t just go up 48% in a day.",
+        "created_at": "Apr 25, 03:39 AEST",
+        "likes": 26,
+        "retweets": 1,
+        "replies": 3,
+        "cashtags": [
+          "$AMSC",
+          "$PLPC"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047732066603942395"
+      },
+      {
+        "id": "2047730369253036160",
+        "text": "@nodeflowsol Transformer/switchgear bottlenecks are like 1.5-5 years… and it was designated as a national security risk few days ago + got the defense production act invoked by the President.\n\nLot of these players will get record inflows for capex + capacity growth from federal funding.",
+        "created_at": "Apr 25, 03:32 AEST",
+        "likes": 33,
+        "retweets": 0,
+        "replies": 2,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047730369253036160"
+      },
+      {
+        "id": "2047729814581432398",
+        "text": "@01100101j When $SIVE hits 1000% sure.",
+        "created_at": "Apr 25, 03:30 AEST",
+        "likes": 60,
+        "retweets": 1,
+        "replies": 3,
+        "cashtags": [
+          "$SIVE"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047729814581432398"
+      },
+      {
+        "id": "2047729405309640899",
+        "text": "If you listened to Optimus Prime…\n\nYou’d be up 47% in just 3 weeks with $HPS.A.\n\nDid you listen to Optimus anon? https://t.co/dUWQBpPu0y https://t.co/NkOSKHXXDo",
+        "created_at": "Apr 25, 03:28 AEST",
+        "likes": 483,
+        "retweets": 11,
+        "replies": 65,
+        "cashtags": [
+          "$HPS.A"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047729405309640899"
+      },
+      {
+        "id": "2047711415994376288",
+        "text": "@offermemoneyXYZ Yeah, I was down a bit on $AXTI but glad it’s back at 1057% gains… https://t.co/VU9achD3MW",
+        "created_at": "Apr 25, 02:17 AEST",
+        "likes": 54,
+        "retweets": 0,
+        "replies": 5,
+        "cashtags": [
+          "$AXTI"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047711415994376288"
+      },
+      {
+        "id": "2047709936860508501",
+        "text": "@troyofsparta No clue lol, I literally said it was a good opportunity for scale across in subscribers chat.\n\nMy neighbors kept going at it and I got too distracted past few days",
+        "created_at": "Apr 25, 02:11 AEST",
+        "likes": 38,
+        "retweets": 0,
+        "replies": 8,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047709936860508501"
+      },
+      {
+        "id": "2047707424703049809",
+        "text": "@UlquiorraRises No? I’m still holding $IQE just down a lot to a small 246% gain https://t.co/eAXSp0sb75",
+        "created_at": "Apr 25, 02:01 AEST",
+        "likes": 55,
+        "retweets": 0,
+        "replies": 3,
+        "cashtags": [
+          "$IQE"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047707424703049809"
+      },
+      {
+        "id": "2047706321160729032",
+        "text": "@mi20483980476 Eh, adjacent, they’re in multiple spaces but have T1 optical transceiver companies",
+        "created_at": "Apr 25, 01:56 AEST",
+        "likes": 26,
+        "retweets": 0,
+        "replies": 3,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047706321160729032"
+      },
+      {
+        "id": "2047705901486985666",
+        "text": "Photonics go brrr.\n\n$MXL +76.2% (lol)\n$AAOI +15.03%\n$SIVE +12.69%\n$AEHR +7.07%\n$SOI +6.19%\n$LITE +4.96%\n\nHope you didn’t sell and try and chase other bottlenecks anon? https://t.co/Ft2p94bDWR",
+        "created_at": "Apr 25, 01:55 AEST",
+        "likes": 1123,
+        "retweets": 65,
+        "replies": 131,
+        "cashtags": [
+          "$MXL",
+          "$AAOI",
+          "$SIVE",
+          "$AEHR",
+          "$SOI",
+          "$LITE"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047705901486985666"
+      },
+      {
+        "id": "2047688270231027947",
+        "text": "Who thought it was a good idea to give Tangerine Peel inspired companies the funds…\n\nTo short the fastest growing names in photonics and memory?\n\n$SNDK and $AAOI have been on a hyperbolic run. \n\nAnd I see names like AAOI continuing to grow as optical transceiver + Made in https://t.co/M2BkraORUe",
+        "created_at": "Apr 25, 00:45 AEST",
+        "likes": 639,
+        "retweets": 30,
+        "replies": 62,
+        "cashtags": [
+          "$SNDK",
+          "$AAOI"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047688270231027947"
+      },
+      {
+        "id": "2047682921545498835",
+        "text": "@CludioNune67383 Yeah? That means $SIVE is actively doing the steps to list on Nasdaq not just “thinking about it”",
+        "created_at": "Apr 25, 00:23 AEST",
+        "likes": 48,
+        "retweets": 1,
+        "replies": 2,
+        "cashtags": [
+          "$SIVE"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047682921545498835"
+      },
+      {
+        "id": "2047590663450243208",
+        "text": "@miraclemaster07 A lot of Taiwanese stocks like shunsin, fittech, win semi and others corrected recently. It's just normal volatility, nothing's fundamentally changed, still like them all.",
+        "created_at": "Apr 24, 18:17 AEST",
+        "likes": 47,
+        "retweets": 0,
+        "replies": 5,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047590663450243208"
+      },
+      {
+        "id": "2047586879328170151",
+        "text": "@UnmaskedBillion Hi, appreciate the more productive discussion.  \n\nBut I've never seen anyone aside from Europeans complain about 2.5% $13M dilution to get listed on NASDAQ. \n\nOver in the US... we have random Bitcoin miners with $6B+ dilution (over half the MC) just to attempt a pivot and buy",
+        "created_at": "Apr 24, 18:02 AEST",
+        "likes": 85,
+        "retweets": 2,
+        "replies": 5,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047586879328170151"
+      },
+      {
+        "id": "2047584052451176687",
+        "text": "@fredrikmob49943 Hi Swedish local. If it's not $AAPL:\n\nPlease name me another US Fortune 100 company (not Samsung by elimination) shipping 50M+ units yearly...\n\nThat fits $SIVE R&amp;D laser specs + applications then?",
+        "created_at": "Apr 24, 17:50 AEST",
+        "likes": 70,
+        "retweets": 0,
+        "replies": 3,
+        "cashtags": [
+          "$AAPL",
+          "$SIVE"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047584052451176687"
+      },
+      {
+        "id": "2047578859319840953",
+        "text": "@sharion73 @veggiepoultry @StormDirac $AAPL won't confirm BOM and upstream vendors in their supply chain. But almost 100% sure, maybe 99%. \n\nMaybe you can name another consumer hardware company shipping 50M+ units yearly that fits their R&amp;D laser specs + applications?",
+        "created_at": "Apr 24, 17:30 AEST",
+        "likes": 54,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [
+          "$AAPL"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047578859319840953"
+      },
+      {
+        "id": "2047578228878143488",
+        "text": "@AndreasSch52269 Thank you for pointing that out.\n\nI thought it would be more of a positive sum socialist mindset where everyone in an economy benefits if a local company does.\n\nNot the \"bring anyone else successful down\" type socialism.",
+        "created_at": "Apr 24, 17:27 AEST",
+        "likes": 55,
+        "retweets": 0,
+        "replies": 6,
+        "cashtags": [],
+        "url": "https://x.com/aleabitoreddit/status/2047578228878143488"
+      },
+      {
+        "id": "2047577584528162838",
+        "text": "@veggiepoultry @StormDirac Rockley went down, which is likely the reason why $SIVE became the $AAPL supplier.",
+        "created_at": "Apr 24, 17:25 AEST",
+        "likes": 39,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [
+          "$SIVE",
+          "$AAPL"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047577584528162838"
+      },
+      {
+        "id": "2047576877574103455",
+        "text": "@Embezzl3r Yeah makes sense about seeing their reactions to $AAPL as their hinted hyperscaler customer for volume ramp.",
+        "created_at": "Apr 24, 17:22 AEST",
+        "likes": 33,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [
+          "$AAPL"
+        ],
+        "url": "https://x.com/aleabitoreddit/status/2047576877574103455"
+      }
+    ];
+
+    // ── STATE ─────────────────────────────────────────────────────────────────────
+    const BRYZON_TWEETS = [
+      {
+        "id": "2047871713460052475",
+        "text": "@jukan05 Love $PENG for a CXL pure play",
+        "created_at": "Apr 25, 12:53 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [
+          "$PENG"
+        ],
+        "url": "https://x.com/BryzonX/status/2047871713460052475"
+      },
+      {
+        "id": "2047870826175930781",
+        "text": "Jukan has CXL on his watchlist \n\n$PENG https://t.co/q10GSR224S",
+        "created_at": "Apr 25, 12:50 AEST",
+        "likes": 4,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [
+          "$PENG"
+        ],
+        "url": "https://x.com/BryzonX/status/2047870826175930781"
+      },
+      {
+        "id": "2047810128607584632",
+        "text": "@wapital3 😂😂😂",
+        "created_at": "Apr 25, 08:49 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047810128607584632"
+      },
+      {
+        "id": "2047809646883471856",
+        "text": "RT @amazonnews: https://t.co/gyTXUJRWDu",
+        "created_at": "Apr 25, 08:47 AEST",
+        "likes": 0,
+        "retweets": 68,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047809646883471856"
+      },
+      {
+        "id": "2047790779763237162",
+        "text": "@roy_salman289 I haven't sold a share if that means anything",
+        "created_at": "Apr 25, 07:32 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047790779763237162"
+      },
+      {
+        "id": "2047790595847156056",
+        "text": "I hold this to be true to this day https://t.co/SH0qYCvuds",
+        "created_at": "Apr 25, 07:31 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047790595847156056"
+      },
+      {
+        "id": "2047789156307546443",
+        "text": "$POWI is on the verge of breaking out of a 5 year downtrend off the back of a huge impulse move from HTF support.\n\nPower semi's are starting to heat up as data centers transition to 800v for the new chip cycle.\n\nIf you got in with me at $47, you are sitting 50% in profit and https://t.co/c6RFVS5b3H https://t.co/f3No5k15Z5",
+        "created_at": "Apr 25, 07:25 AEST",
+        "likes": 6,
+        "retweets": 0,
+        "replies": 2,
+        "cashtags": [
+          "$POWI"
+        ],
+        "url": "https://x.com/BryzonX/status/2047789156307546443"
+      },
+      {
+        "id": "2047778282058481986",
+        "text": "@learnallday1 Appreciate you my man! Just sharing ideas as they come.",
+        "created_at": "Apr 25, 06:42 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047778282058481986"
+      },
+      {
+        "id": "2047762540273570101",
+        "text": "@TristanMacinnes Big chilling",
+        "created_at": "Apr 25, 05:40 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047762540273570101"
+      },
+      {
+        "id": "2047755300581875909",
+        "text": "@roy_salman289 Would wait for a pullback on $MXL\n\nDon’t worry, it’s coming. Luckily we’re well positioned for volatility.",
+        "created_at": "Apr 25, 05:11 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [
+          "$MXL"
+        ],
+        "url": "https://x.com/BryzonX/status/2047755300581875909"
+      },
+      {
+        "id": "2047755117202690535",
+        "text": "@TristanMacinnes Lots of upside on this one. Was down 30% at one point and bought calls now deep ITM!",
+        "created_at": "Apr 25, 05:10 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047755117202690535"
+      },
+      {
+        "id": "2047750218486280478",
+        "text": "$SYNA nice follow through since this tweet\n\nSuper excited for this name moving forward as edge inference becomes a larger TAM as we integrate AI into everyday devices https://t.co/1ugmBjlP93 https://t.co/mYjS4UJd40",
+        "created_at": "Apr 25, 04:51 AEST",
+        "likes": 5,
+        "retweets": 0,
+        "replies": 2,
+        "cashtags": [
+          "$SYNA"
+        ],
+        "url": "https://x.com/BryzonX/status/2047750218486280478"
+      },
+      {
+        "id": "2047744358573822232",
+        "text": "Deep dive on a small cap I’ve been flat on for about a month and doubled down today \n\nComing up",
+        "created_at": "Apr 25, 04:27 AEST",
+        "likes": 6,
+        "retweets": 0,
+        "replies": 2,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047744358573822232"
+      },
+      {
+        "id": "2047727994488369546",
+        "text": "@P_Earns24 This IS financial advice.",
+        "created_at": "Apr 25, 03:22 AEST",
+        "likes": 3,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047727994488369546"
+      },
+      {
+        "id": "2047725386734415872",
+        "text": "A lot of people are seeing the $AMD &amp; $INTC run as a short term \"CPU shortage\" move that can't possibly go any longer\n\nIn reality this is a fundamental shift in the AI evolution as a whole\n\nFor years, $NVDA dominated the training industry as models started to collect data and now https://t.co/KgdFA8856Q",
+        "created_at": "Apr 25, 03:12 AEST",
+        "likes": 7,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [
+          "$AMD",
+          "$INTC",
+          "$NVDA"
+        ],
+        "url": "https://x.com/BryzonX/status/2047725386734415872"
+      },
+      {
+        "id": "2047721809035088331",
+        "text": "RT @BryzonX: The CPU shortage is here... $AMD is positioned to be the next big winner in 2026 ⏳\n\nData center CPU shortages are emerging as…",
+        "created_at": "Apr 25, 02:58 AEST",
+        "likes": 0,
+        "retweets": 1,
+        "replies": 0,
+        "cashtags": [
+          "$AMD"
+        ],
+        "url": "https://x.com/BryzonX/status/2047721809035088331"
+      },
+      {
+        "id": "2047718452325167120",
+        "text": "$PENG breaking out of its 8 year base 👀\n\nDon't underestimate a HTF breakout https://t.co/cLAO8SMSkD https://t.co/bg8BRoXm34",
+        "created_at": "Apr 25, 02:44 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [
+          "$PENG"
+        ],
+        "url": "https://x.com/BryzonX/status/2047718452325167120"
+      },
+      {
+        "id": "2047713809763275201",
+        "text": "@LogicalThesis $PENG looks so primed",
+        "created_at": "Apr 25, 02:26 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [
+          "$PENG"
+        ],
+        "url": "https://x.com/BryzonX/status/2047713809763275201"
+      },
+      {
+        "id": "2047713622466642408",
+        "text": "@bubbleboi Goals",
+        "created_at": "Apr 25, 02:25 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/BryzonX/status/2047713622466642408"
+      }
+    ];
+
+    const VENU_TWEETS = [
+      {
+        "id": "2048227395757625520",
+        "text": "@jjeebhoy 💯",
+        "created_at": "Apr 26, 12:27 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048227395757625520"
+      },
+      {
+        "id": "2048215637282173233",
+        "text": "@lakshminarasima Nothing :) it’s just for watchlist at this point",
+        "created_at": "Apr 26, 11:40 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048215637282173233"
+      },
+      {
+        "id": "2048215561692397732",
+        "text": "@QuikInsightz Thank you!",
+        "created_at": "Apr 26, 11:40 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048215561692397732"
+      },
+      {
+        "id": "2048214523056963606",
+        "text": "@options_selling Yep!!",
+        "created_at": "Apr 26, 11:36 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048214523056963606"
+      },
+      {
+        "id": "2048214477842334041",
+        "text": "@wey_how12640 Thank you bro 🫡🙌🏻",
+        "created_at": "Apr 26, 11:36 AEST",
+        "likes": 2,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048214477842334041"
+      },
+      {
+        "id": "2048202368744030657",
+        "text": "@big_Drew19 💯💯",
+        "created_at": "Apr 26, 10:47 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048202368744030657"
+      },
+      {
+        "id": "2048197077566619855",
+        "text": "in $MRVL case, 1.618 Fib Extension around $210 level as well which aligns with measured move!\n\nthat's a place it might take a break but I don't think move is nowhere close to done, IMO!",
+        "created_at": "Apr 26, 10:26 AEST",
+        "likes": 12,
+        "retweets": 1,
+        "replies": 3,
+        "cashtags": [
+          "$MRVL"
+        ],
+        "url": "https://x.com/Venu_7_/status/2048197077566619855"
+      },
+      {
+        "id": "2048197075272417565",
+        "text": "Measured moves - the simplest way to find targets\n\nwhen there’s no clear resistance, you can use measured moves as an alternative to fib extensions\n\nfrom classical technical analysis - Wyckoff, Edwards & Magee, Stan Weinstein the idea:\n\nbase = accumulation\nbreakout → move = size https://t.co/Cro0fcjiOO",
+        "created_at": "Apr 26, 10:26 AEST",
+        "likes": 114,
+        "retweets": 4,
+        "replies": 7,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048197075272417565"
+      },
+      {
+        "id": "2048187474720264244",
+        "text": "@Praath 💯💯💯 https://t.co/AYwYFJvsdh",
+        "created_at": "Apr 26, 09:48 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048187474720264244"
+      },
+      {
+        "id": "2048185642321137951",
+        "text": "RT @jrouldz: Making a desperate plea to X here because I’m not sure what else to do\n\nI have a dozens of subscribers messaging me that my su…",
+        "created_at": "Apr 26, 09:41 AEST",
+        "likes": 0,
+        "retweets": 8,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048185642321137951"
+      },
+      {
+        "id": "2048185319783284790",
+        "text": "@RemoteNavigator @schaneru79 @aleabitoreddit @crux_capital_ @dannycheng2022 😅 https://t.co/n8LIQX2Qm9",
+        "created_at": "Apr 26, 09:40 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 3,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048185319783284790"
+      },
+      {
+        "id": "2048177306313932873",
+        "text": "@SrihariHS1 Never fan a screener - most of these come from logical thinking while finding the themes. Once finding the theme - drills down to best companies in the theme!",
+        "created_at": "Apr 26, 09:08 AEST",
+        "likes": 0,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048177306313932873"
+      },
+      {
+        "id": "2048176542338150540",
+        "text": "@schaneru79 @aleabitoreddit @crux_capital_ @dannycheng2022 Thank you - I appreciate the shoutout, have a good weekend 🙌🏻",
+        "created_at": "Apr 26, 09:05 AEST",
+        "likes": 3,
+        "retweets": 0,
+        "replies": 3,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048176542338150540"
+      },
+      {
+        "id": "2048176160543236172",
+        "text": "@Erik96754 💯🫡 thank you for sharing your view Erik!",
+        "created_at": "Apr 26, 09:03 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 1,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048176160543236172"
+      },
+      {
+        "id": "2048145777252606382",
+        "text": "@yegeinal 🫡🫡",
+        "created_at": "Apr 26, 07:03 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048145777252606382"
+      },
+      {
+        "id": "2048138927559901692",
+        "text": "@RanierisEcho Thank you, brother 🫡🙌🏻",
+        "created_at": "Apr 26, 06:35 AEST",
+        "likes": 1,
+        "retweets": 0,
+        "replies": 0,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048138927559901692"
+      },
+      {
+        "id": "2048133631840047497",
+        "text": "@TheLongInvest Hey TLI,\n\nI still see plenty of high-quality semiconductor names with upside, especially on a pullback.\n\nSharing a list here - worth keeping on  radar. https://t.co/61XvokBhZh",
+        "created_at": "Apr 26, 06:14 AEST",
+        "likes": 25,
+        "retweets": 2,
+        "replies": 2,
+        "cashtags": [],
+        "url": "https://x.com/Venu_7_/status/2048133631840047497"
+      },
+      {
+        "id": "2048078874559611109",
+        "text": "Semiconductor sub-themes still in Stage 1 bases\n\n10 names building massive Stage 1 bases\n\nas semis pull back in the coming weeks, these are the names worth keeping on your watchlist\n\n$ENTG $ICHR $PENG $NVTS $AOSL $SYNA $CRDO $GFS $PLAB $COHU",
+        "created_at": "Apr 25, 16:37 AEST",
+        "likes": 100,
+        "retweets": 6,
+        "replies": 7,
+        "cashtags": [
+          "$ENTG",
+          "$ICHR",
+          "$PENG",
+          "$NVTS",
+          "$AOSL",
+          "$SYNA",
+          "$CRDO",
+          "$GFS",
+          "$PLAB",
+          "$COHU"
+        ],
+        "url": "https://x.com/venu_7_/status/2048078874559611109"
+      }
+    ];
+
+    const state = {
+      s: { filter: 'all', tickerFilter: null },
+      w: { filter: 'all', tickerFilter: null },
+      a: { filter: 'all', tickerFilter: null },
+      b: { filter: 'all', tickerFilter: null },
+      v: { filter: 'all', tickerFilter: null }
+    };
+
+    // Per-author lookup tables — extend here when adding a new author.
+    const TWEETS_BY_WHO = { s: SIKAND_TWEETS, w: WOLFF_TWEETS, a: SERENITY_TWEETS, b: BRYZON_TWEETS, v: VENU_TWEETS };
+    const TAB_ID_BY_WHO = { s: 'sikand', w: 'wolff', a: 'serenity', b: 'bryzonx', v: 'venu' };
+    const COUNT_ID_BY_WHO = { s: 's-count', w: 'w-count', a: 'a-count', b: 'b-count', v: 'v-count' };
+    const COLOR_BY_WHO = { s: '#4fc3f7', w: '#10b981', a: '#a78bfa', b: '#f43f5e', v: '#f59e0b' };
+    const ACTIVE_CLASS_BY_WHO = { s: 'active', w: 'wolff-active', a: 'serenity-active', b: 'bryzonx-active', v: 'venu-active' };
+    const AUTHOR_LABEL = { s: '🦑 Sikand', w: 'Wolff', a: '🧘 Serenity', b: '📈 BryzonX', v: 'Venu' };
+    const AUTHOR_NAME_BY_WHO = { s: 'Sikand', w: 'Wolff', a: 'Serenity', b: 'BryzonX', v: 'Venu' };
+
+    // ── TABS ──────────────────────────────────────────────────────────────────────
+    function showTab(id, btn) {
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab-' + id).classList.add('active');
+      if (btn) btn.classList.add('active');
+      if (id === 'overlap') buildOverlap();
+    }
+
+    // ── COMBINED ALL FEED ─────────────────────────────────────────────────────────
+    const allState = { author: 'all', filter: 'all' };
+
+    const ALL_TWEETS = [
+      ...SIKAND_TWEETS.map(t => ({ ...t, who: 's' })),
+      ...WOLFF_TWEETS.map(t => ({ ...t, who: 'w' })),
+      ...SERENITY_TWEETS.map(t => ({ ...t, who: 'a' })),
+      ...BRYZON_TWEETS.map(t => ({ ...t, who: 'b' })),
+      ...VENU_TWEETS.map(t => ({ ...t, who: 'v' }))
+    ].sort((a, b) => BigInt(b.id) > BigInt(a.id) ? 1 : -1);
+
+    function setAuthorFilter(who) {
+      allState.author = who;
+      ['all', 's', 'w', 'a', 'b', 'v'].forEach(k => {
+        const btn = document.getElementById('af-' + k);
+        if (btn) btn.className = 'author-btn' + (k === who ? ` active-${k}` : '');
+      });
+      applyAllFilter();
+    }
+
+    function setAllFilter(f, btn) {
+      allState.filter = f;
+      document.querySelectorAll('#tab-all .filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      applyAllFilter();
+    }
+
+    function applyAllFilter() {
+      let tweets = ALL_TWEETS;
+      const search = document.getElementById('all-search').value.toLowerCase().trim();
+      if (allState.author !== 'all') tweets = tweets.filter(t => t.who === allState.author);
+      if (allState.filter === 'tickers') tweets = tweets.filter(t => t.cashtags.length > 0);
+      if (allState.filter === 'hot') tweets = tweets.filter(t => t.likes >= 50 || t.retweets >= 5);
+      if (search) tweets = tweets.filter(t => t.text.toLowerCase().includes(search) || t.cashtags.some(c => c.toLowerCase().includes(search)));
+      renderAllGrid(tweets);
+      document.getElementById('all-count').textContent = tweets.length;
+    }
+
+    function renderAllGrid(tweets) {
+      const grid = document.getElementById('all-grid');
+      if (!tweets.length) { grid.innerHTML = '<div class="empty-state">No tweets match your filter.</div>'; return; }
+      grid.innerHTML = tweets.map(t => {
+        const hot = t.likes >= 100 || t.retweets >= 10;
+        const hasTicker = t.cashtags.length > 0;
+        const borderClass = hot ? 'hot' : hasTicker ? `has-ticker ${t.who}` : '';
+        const tagsHtml = hasTicker
+          ? `<div class="tweet-cashtags">${t.cashtags.map(c => `<span class="cashtag-tag ${t.who}">${c}</span>`).join('')}</div>` : '';
+        return `<div class="tweet-card ${borderClass}" onclick="safeOpen('${t.url}')">
+      <div class="tweet-meta">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="author-badge ${t.who}">${AUTHOR_LABEL[t.who]}</span>
+          <span class="tweet-time">${t.created_at}</span>
+        </div>
+        <div class="eng-row">
+          <span class="eng ${t.likes >= 100 ? 'hot' : ''}">♥ ${t.likes.toLocaleString()}</span>
+          <span class="eng ${t.retweets >= 10 ? 'hot' : ''}">↻ ${t.retweets}</span>
+          <span class="eng">💬 ${t.replies}</span>
+        </div>
+      </div>
+      <div class="tweet-text">${t.text}</div>
+      ${tagsHtml}
+      <div class="tweet-footer"><a class="tweet-link" href="${t.url}" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault();event.stopPropagation();safeOpen('${t.url}')">View on X ↗</a></div>
+    </div>`;
+      }).join('');
+    }
+
+    // ── FEED LOGIC ────────────────────────────────────────────────────────────────
+    function setFilter(who, f, btn) {
+      state[who].filter = f;
+      state[who].tickerFilter = null;
+      document.querySelectorAll(`#tab-${TAB_ID_BY_WHO[who]} .filter-btn`)
+        .forEach(b => b.classList.remove('active', 'wolff-active', 'serenity-active', 'bryzonx-active', 'venu-active'));
+      btn.classList.add(ACTIVE_CLASS_BY_WHO[who]);
+      updatePills(who);
+      applyFilter(who);
+    }
+
+    function setTickerFilter(who, ticker) {
+      state[who].tickerFilter = state[who].tickerFilter === ticker ? null : ticker;
+      updatePills(who);
+      applyFilter(who);
+    }
+
+    function applyFilter(who) {
+      const tweets = TWEETS_BY_WHO[who];
+      const search = document.getElementById(who + '-search').value.toLowerCase().trim();
+      const { filter, tickerFilter } = state[who];
+      let filtered = tweets;
+      if (filter === 'tickers') filtered = filtered.filter(t => t.cashtags.length > 0);
+      if (filter === 'hot') filtered = filtered.filter(t => t.likes >= 50 || t.retweets >= 5);
+      if (tickerFilter) filtered = filtered.filter(t => t.cashtags.includes(tickerFilter));
+      if (search) filtered = filtered.filter(t => t.text.toLowerCase().includes(search) || t.cashtags.some(c => c.toLowerCase().includes(search)));
+      renderGrid(who, filtered);
+      document.getElementById(COUNT_ID_BY_WHO[who]).textContent = filtered.length;
+    }
+
+    function renderGrid(who, tweets) {
+      const grid = document.getElementById(who + '-grid');
+      if (!tweets.length) { grid.innerHTML = '<div class="empty-state">No tweets match your filter.</div>'; return; }
+      grid.innerHTML = tweets.map(t => {
+        const hot = t.likes >= 100 || t.retweets >= 10;
+        const hasTicker = t.cashtags.length > 0;
+        const borderClass = hot ? 'hot' : hasTicker ? `has-ticker ${who}` : '';
+        const tagsHtml = hasTicker
+          ? `<div class="tweet-cashtags">${t.cashtags.map(c => `<span class="cashtag-tag ${who}">${c}</span>`).join('')}</div>` : '';
+        return `<div class="tweet-card ${borderClass}" onclick="safeOpen('${t.url}')">
+      <div class="tweet-meta">
+        <span class="tweet-time">${t.created_at}</span>
+        <div class="eng-row">
+          <span class="eng ${t.likes >= 100 ? 'hot' : ''}">♥ ${t.likes.toLocaleString()}</span>
+          <span class="eng ${t.retweets >= 10 ? 'hot' : ''}">↻ ${t.retweets}</span>
+          <span class="eng">💬 ${t.replies}</span>
+        </div>
+      </div>
+      <div class="tweet-text">${t.text}</div>
+      ${tagsHtml}
+      <div class="tweet-footer"><a class="tweet-link" href="${t.url}" target="_blank" rel="noopener noreferrer" onclick="event.preventDefault();event.stopPropagation();safeOpen('${t.url}')">View on X ↗</a></div>
+    </div>`;
+      }).join('');
+    }
+
+    function buildTickerCounts(tweets) {
+      const c = {};
+      tweets.forEach(t => t.cashtags.forEach(tag => { c[tag] = (c[tag] || 0) + 1; }));
+      return c;
+    }
+
+    function updatePills(who) {
+      const tweets = TWEETS_BY_WHO[who];
+      const counts = buildTickerCounts(tweets);
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      const bar = document.getElementById(who + '-tickers-bar');
+      const tf = state[who].tickerFilter;
+      const activeColor = COLOR_BY_WHO[who];
+      bar.innerHTML = `<span class="bar-label">Tickers</span>` + sorted.map(([t, n]) =>
+        `<span class="ticker-pill ${who}" style="${tf === t ? `background:${activeColor};color:#0b0e17` : ''}" onclick="setTickerFilter('${who}','${t}')">${t}<span class="cnt">×${n}</span></span>`
+      ).join('');
+    }
+
+    // ── OVERLAP / BUBBLE CHART ─────────────────────────────────────────────────────
+    function buildOverlap() {
+      const countsByWho = Object.fromEntries(
+        Object.entries(TWEETS_BY_WHO).map(([who, tweets]) => [who, buildTickerCounts(tweets)])
+      );
+      const allTickers = new Set(Object.values(countsByWho).flatMap(counts => Object.keys(counts)));
+      const tickerRows = [...allTickers].map(ticker => {
+        const authors = Object.entries(countsByWho)
+          .filter(([, counts]) => counts[ticker])
+          .map(([who, counts]) => ({ who, count: counts[ticker] }));
+        const total = authors.reduce((sum, author) => sum + author.count, 0);
+        const shared = authors.length > 1;
+        const color = shared ? '#f59e0b' : COLOR_BY_WHO[authors[0].who];
+        return { ticker, authors, total, shared, color };
+      }).sort((a, b) => b.authors.length - a.authors.length || b.total - a.total || a.ticker.localeCompare(b.ticker));
+      const sharedTickers = tickerRows.filter(row => row.shared);
+
+      document.getElementById('ov-count').textContent = sharedTickers.length;
+
+      const sharedDiv = document.getElementById('shared-list');
+      if (sharedTickers.length === 0) {
+        sharedDiv.innerHTML = `<div class="no-shared">
+      <strong>No shared tickers found</strong>
+      Refresh more tweets to uncover overlap across the tracked accounts.
+    </div>`;
+      } else {
+        sharedDiv.innerHTML = sharedTickers.map(row => `
+      <div class="shared-item">
+        <div class="shared-ticker">${row.ticker}</div>
+        <div class="shared-meta">
+          ${row.authors.map(author => `
+            <div class="by ${author.who}">${AUTHOR_NAME_BY_WHO[author.who]}: <span>${author.count}×</span></div>
+          `).join('')}
+        </div>
+      </div>`).join('');
+      }
+
+      drawBubbles(tickerRows);
+    }
+
+    function drawBubbles(bubbles) {
+      const svg = document.getElementById('bubble-svg');
+      const W = Math.max(1180, svg.parentElement.clientWidth - 40 || 1180);
+      const H = 720;
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.setAttribute('width', W);
+      svg.setAttribute('height', H);
+
+      const maxCount = Math.max(...bubbles.map(b => b.total));
+      const rScale = count => Math.max(20, Math.sqrt(count / maxCount) * 46);
+      const lanes = ['shared', 's', 'w', 'a', 'b', 'v'];
+      const laneLabel = { shared: 'Shared', s: 'Sikand', w: 'Wolff', a: 'Serenity', b: 'BryzonX', v: 'Venu' };
+      const laneColor = { shared: '#f59e0b', ...COLOR_BY_WHO };
+      const laneX = d3.scalePoint().domain(lanes).range([W * 0.065, W * 0.935]).padding(0.35);
+      const laneWidth = W / lanes.length - 18;
+
+      const nodes = bubbles.map((b, i) => {
+        const lane = b.shared ? 'shared' : b.authors[0].who;
+        return {
+          ...b,
+          lane,
+          r: rScale(b.total),
+          x: laneX(lane) + (i % 3 - 1) * 18,
+          y: H * 0.52 + ((i % 7) - 3) * 22,
+        };
+      });
+
+      const sim = d3.forceSimulation(nodes)
+        .force('charge', d3.forceManyBody().strength(1))
+        .force('collision', d3.forceCollide().radius(d => d.r + 14).strength(1))
+        .force('x', d3.forceX(d => laneX(d.lane)).strength(0.18))
+        .force('y', d3.forceY(H * 0.54).strength(0.055))
+        .stop();
+
+      for (let i = 0; i < 760; i++) sim.tick();
+
+      nodes.forEach(n => {
+        const cx = laneX(n.lane);
+        n.x = Math.max(cx - laneWidth / 2 + n.r + 10, Math.min(cx + laneWidth / 2 - n.r - 10, n.x));
+        n.y = Math.max(108 + n.r, Math.min(H - n.r - 24, n.y));
+      });
+
+      const ns = d3.create('svg').attr('xmlns', 'http://www.w3.org/2000/svg');
+
+      lanes.forEach(lane => {
+        const count = nodes.filter(n => n.lane === lane).length;
+        const x = laneX(lane);
+        ns.append('rect')
+          .attr('class', 'bubble-lane-bg')
+          .attr('x', x - laneWidth / 2)
+          .attr('y', 44)
+          .attr('width', laneWidth)
+          .attr('height', H - 70)
+          .attr('rx', 10);
+        ns.append('text')
+          .attr('class', 'bubble-lane-label')
+          .attr('x', x)
+          .attr('y', 28)
+          .attr('text-anchor', 'middle')
+          .text(`${laneLabel[lane]} (${count})`);
+      });
+
+      nodes.sort((a, b) => b.r - a.r).forEach(n => {
+        const symbol = n.ticker.replace('$', '');
+        const authorSummary = n.authors.map(author => `${AUTHOR_NAME_BY_WHO[author.who]} ${author.count}x`).join(' | ');
+        const g = ns.append('g')
+          .attr('class', 'bubble-node')
+          .attr('transform', `translate(${n.x},${n.y})`)
+          .attr('style', 'cursor:pointer')
+          .attr('onclick', `safeOpen('https://finance.yahoo.com/quote/${symbol}','https://finance.yahoo.com')`);
+        g.append('title').text(`${n.ticker} - ${authorSummary}`);
+        g.append('circle')
+          .attr('r', n.r)
+          .attr('fill', n.color)
+          .attr('fill-opacity', n.shared ? 0.92 : 0.78)
+          .attr('stroke', n.shared ? '#ffd166' : laneColor[n.lane])
+          .attr('stroke-width', n.shared ? 2.5 : 1.5);
+        const fontSize = n.r > 40 ? 13 : n.r > 29 ? 11 : 10;
+        g.append('text')
+          .attr('text-anchor', 'middle')
+          .attr('dy', n.total > 1 ? '-0.05em' : '0.35em')
+          .attr('font-size', fontSize)
+          .attr('font-weight', '800')
+          .attr('fill', '#08111f')
+          .attr('font-family', 'SF Mono,monospace')
+          .text(symbol);
+        if (n.total > 1) {
+          g.append('text')
+            .attr('text-anchor', 'middle')
+            .attr('dy', fontSize + 3)
+            .attr('font-size', 9)
+            .attr('font-weight', '700')
+            .attr('fill', 'rgba(8,17,31,0.68)')
+            .text(`${n.total} mentions`);
+        }
+      });
+
+      svg.innerHTML = ns.node().innerHTML;
+    }
+
+    // ── INIT ──────────────────────────────────────────────────────────────────────
+    function init() {
+      applyAllFilter();
+      updatePills('s'); applyFilter('s');
+      updatePills('w'); applyFilter('w');
+      updatePills('a'); applyFilter('a');
+      updatePills('b'); applyFilter('b');
+      updatePills('v'); applyFilter('v');
+      buildOverlap();
+    }
+
+    init();
+  </script>
+</body>
+
+</html>

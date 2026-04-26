@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://clob.polymarket.com; img-src 'self' data: https:; frame-ancestors 'none';">
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<title>Morning Stock Watchlist</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #0b0e17;
+    color: #e0e6ed;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  header h1 {
+    font-size: 26px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+  header h1 span { color: #4fc3f7; }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .date-badge {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: #8892a8;
+  }
+  .refresh-note {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 12px;
+    color: #8892a8;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    line-height: 1.35;
+  }
+  .refresh-note .label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #4a5578;
+  }
+  .refresh-note .value {
+    color: #4fc3f7;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .sessions-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .session-card {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 12px;
+    padding: 18px 20px 16px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+  .session-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+  }
+  .session-card.mon { --accent: #4fc3f7; }
+  .session-card.wed { --accent: #4caf50; }
+  .session-card.fri { --accent: #ffd54f; }
+  .session-card.live {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent), 0 0 32px #4caf5044;
+    animation: cardPulse 2s ease-in-out infinite;
+  }
+  @keyframes cardPulse {
+    0%, 100% { box-shadow: 0 0 0 1px var(--accent), 0 0 20px #4caf5044; }
+    50% { box-shadow: 0 0 0 1px var(--accent), 0 0 40px #4caf5088; }
+  }
+  .session-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+  .session-name {
+    font-weight: 700;
+    font-size: 14px;
+    color: #fff;
+    letter-spacing: -0.2px;
+  }
+  .session-live-tag {
+    display: none;
+    font-size: 10px;
+    font-weight: 700;
+    color: #0b0e17;
+    background: var(--accent);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  .session-card.live .session-live-tag { display: inline-block; }
+  .session-card.live .session-next-label { display: none; }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+  .session-next-label {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #4a5578;
+    font-weight: 600;
+  }
+  .session-times {
+    font-size: 11px;
+    color: #6b7a99;
+    margin-bottom: 10px;
+    line-height: 1.55;
+  }
+  .session-times .et { color: #8892a8; font-weight: 500; }
+  .session-times .aest { color: var(--accent); font-weight: 600; }
+  .session-countdown {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
+    margin-bottom: 4px;
+    line-height: 1;
+  }
+  .session-card.live .session-countdown { color: var(--accent); }
+  .session-meta {
+    font-size: 10px;
+    color: #4a5578;
+    line-height: 1.45;
+    margin-top: 8px;
+  }
+  @media (max-width: 900px) {
+    .sessions-bar { grid-template-columns: 1fr; }
+    .poly-bar { grid-template-columns: 1fr; }
+  }
+
+  /* --- Polymarket Section --- */
+  .poly-section { margin-bottom: 24px; }
+  .poly-section-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .poly-section-header h3 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #4a5578;
+  }
+  .poly-logo {
+    font-size: 11px;
+    font-weight: 700;
+    color: #4a5578;
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 4px;
+    padding: 2px 8px;
+  }
+  .poly-link {
+    font-size: 10px;
+    color: #4a5578;
+    text-decoration: none;
+    margin-left: auto;
+    transition: color 0.2s;
+  }
+  .poly-link:hover { color: #8892a8; }
+  .poly-bar {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+  }
+  .poly-card {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 12px;
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .poly-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: #9b59b6;
+  }
+  .poly-card-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6b7a99;
+    margin-bottom: 12px;
+    line-height: 1.35;
+  }
+  .poly-card-title a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .poly-card-title a:hover { color: #9b59b6; }
+  .poly-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-bottom: 10px;
+  }
+  .poly-outcome {
+    text-align: center;
+  }
+  .poly-outcome .pct {
+    font-size: 26px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+  .poly-outcome .label {
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6b7a99;
+    margin-top: 3px;
+  }
+  .poly-outcome.up .pct   { color: #4caf50; }
+  .poly-outcome.down .pct { color: #ef5350; }
+  .poly-outcome.yes .pct  { color: #ef5350; }
+  .poly-outcome.no .pct   { color: #4caf50; }
+  .poly-prob-bar {
+    height: 6px;
+    border-radius: 3px;
+    background: #2a3250;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .poly-prob-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #4caf50, #81c784);
+    transition: width 0.6s ease;
+  }
+  .poly-prob-fill.bearish {
+    background: linear-gradient(90deg, #ef5350, #e57373);
+  }
+  .poly-meta {
+    font-size: 10px;
+    color: #4a5578;
+    display: flex;
+    justify-content: space-between;
+  }
+  /* SPX bucket chart */
+  .spx-buckets {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    margin-bottom: 8px;
+  }
+  .spx-bucket-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .spx-bucket-label {
+    font-size: 10px;
+    color: #6b7a99;
+    width: 80px;
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+  .spx-bucket-bar-wrap {
+    flex: 1;
+    height: 14px;
+    background: #1e2640;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+  }
+  .spx-bucket-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: #9b59b6;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    padding-right: 4px;
+    transition: width 0.6s ease;
+    min-width: 0;
+  }
+  .spx-bucket-fill.leading { background: #4fc3f7; }
+  .spx-bucket-pct {
+    font-size: 9px;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .poly-loading {
+    color: #4a5578;
+    font-size: 12px;
+    font-style: italic;
+    padding: 12px 0;
+    text-align: center;
+  }
+  .poly-error {
+    color: #ef5350;
+    font-size: 11px;
+    padding: 8px 0;
+    text-align: center;
+  }
+
+  /* ── Farside BTC ETF Flows ───────────────────────────────────── */
+  .farside-section { margin-bottom: 24px; }
+  .farside-section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .farside-section-header h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #e0e6ed;
+    letter-spacing: -0.1px;
+  }
+  .farside-logo {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    color: #0b0e17;
+    background: #f7931a;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+  .farside-link {
+    margin-left: auto;
+    font-size: 11px;
+    color: #4a5578;
+    text-decoration: none;
+  }
+  .farside-link:hover { color: #8892a8; }
+  .farside-fetched {
+    font-size: 10px;
+    color: #4a5578;
+    font-variant-numeric: tabular-nums;
+  }
+  .farside-wrap {
+    background: #111728;
+    border: 1px solid #2a3250;
+    border-radius: 12px;
+    overflow: auto;
+  }
+  table.farside {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+  }
+  table.farside th,
+  table.farside td {
+    padding: 8px 10px;
+    white-space: nowrap;
+    text-align: right;
+    border-bottom: 1px solid #1e2640;
+  }
+  table.farside th {
+    background: #161b2e;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: #6b7a99;
+    position: sticky;
+    top: 0;
+  }
+  table.farside th:first-child,
+  table.farside td:first-child {
+    text-align: left;
+    color: #8892a8;
+    font-weight: 500;
+  }
+  table.farside td.ticker-col {
+    color: #4fc3f7;
+    font-weight: 600;
+  }
+  table.farside td.pos { color: #4caf50; }
+  table.farside td.neg { color: #ef5350; }
+  table.farside td.zero { color: #4a5578; }
+  table.farside td.total {
+    font-weight: 700;
+    color: #fff;
+    border-left: 1px solid #2a3250;
+  }
+  table.farside tr.summary td {
+    background: #161b2e;
+    font-weight: 700;
+    color: #e0e6ed;
+    border-top: 1px solid #2a3250;
+  }
+  table.farside tr:last-child td { border-bottom: none; }
+
+  .summary-bar {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+  .summary-card {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 10px;
+    padding: 16px 22px;
+    flex: 1;
+    min-width: 140px;
+  }
+  .summary-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #6b7a99; margin-bottom: 6px; }
+  .summary-card .value { font-size: 22px; font-weight: 700; color: #fff; }
+  .summary-card .value.green { color: #4caf50; }
+  .summary-card .value.red { color: #ef5350; }
+  .summary-card .value.blue { color: #4fc3f7; }
+  .summary-card .sub { font-size: 11px; color: #6b7a99; margin-top: 4px; }
+
+  .controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+  .controls input, .controls select {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: #e0e6ed;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .controls input:focus, .controls select:focus { border-color: #4fc3f7; }
+  .controls input::placeholder { color: #4a5578; }
+  .btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-primary { background: #4fc3f7; color: #0b0e17; }
+  .btn-primary:hover { background: #81d4fa; }
+  .btn-danger { background: transparent; border: 1px solid #ef5350; color: #ef5350; }
+  .btn-danger:hover { background: #ef535020; }
+  .btn-secondary { background: #2a3250; color: #8892a8; }
+  .btn-secondary:hover { background: #354060; color: #fff; }
+
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: #111728;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #2a3250;
+  }
+  thead th {
+    background: #161b2e;
+    padding: 14px 14px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: #6b7a99;
+    text-align: left;
+    border-bottom: 1px solid #2a3250;
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: #4fc3f7; }
+  tbody tr { transition: background 0.15s; }
+  tbody tr:hover { background: #1a2040; }
+  tbody td {
+    padding: 12px 14px;
+    font-size: 14px;
+    border-bottom: 1px solid #1e2640;
+    vertical-align: middle;
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  .ticker {
+    font-weight: 700;
+    color: #4fc3f7;
+    font-size: 15px;
+  }
+  .company { color: #8892a8; font-size: 12px; }
+  .exchange-badge {
+    display: inline-block;
+    background: #4fc3f720;
+    color: #4fc3f7;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-left: 6px;
+  }
+  .sector-badge {
+    display: inline-block;
+    background: #2a3250;
+    color: #8892a8;
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 6px;
+  }
+  .price { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .change-pos { color: #4caf50; font-weight: 600; }
+  .change-neg { color: #ef5350; font-weight: 600; }
+  .target { color: #ffd54f; font-weight: 500; }
+  .range-text { font-size: 12px; color: #6b7a99; font-variant-numeric: tabular-nums; }
+  .range-bar-wrap {
+    width: 80px;
+    height: 4px;
+    background: #2a3250;
+    border-radius: 2px;
+    margin-top: 4px;
+    position: relative;
+  }
+  .range-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: linear-gradient(90deg, #ef5350, #ffd54f, #4caf50);
+  }
+  .range-dot {
+    width: 8px;
+    height: 8px;
+    background: #fff;
+    border-radius: 50%;
+    position: absolute;
+    top: -2px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 4px #0004;
+  }
+  .catalyst {
+    max-width: 200px;
+    font-size: 13px;
+    color: #8892a8;
+    line-height: 1.4;
+  }
+  .vol-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .vol-ratio {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+  }
+  .vol-high { background: #4caf5025; color: #4caf50; }
+  .vol-normal { background: #2a3250; color: #8892a8; }
+  .vol-low { background: #ef535025; color: #ef5350; }
+  .dist-col { text-align: center; white-space: nowrap; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .dist-from-low { color: #4caf50; font-weight: 600; }
+  .dist-from-high { color: #ef5350; font-weight: 600; }
+  .dist-label { font-size: 10px; color: #4a5578; display: block; }
+  .priority-high { border-left: 3px solid #4fc3f7; }
+  .priority-med { border-left: 3px solid #ffd54f; }
+  .priority-low { border-left: 3px solid #2a3250; }
+  .actions-cell { display: flex; gap: 6px; }
+  .actions-cell button {
+    background: transparent;
+    border: 1px solid #2a3250;
+    color: #6b7a99;
+    border-radius: 6px;
+    padding: 5px 8px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.2s;
+  }
+  .actions-cell button:hover { border-color: #4fc3f7; color: #4fc3f7; }
+  .actions-cell button.del:hover { border-color: #ef5350; color: #ef5350; }
+
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #0008;
+    z-index: 100;
+    justify-content: center;
+    align-items: center;
+  }
+  .modal-overlay.active { display: flex; }
+  .modal {
+    background: #161b2e;
+    border: 1px solid #2a3250;
+    border-radius: 14px;
+    padding: 28px;
+    width: 520px;
+    max-width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+  .modal h2 { font-size: 18px; margin-bottom: 20px; color: #fff; }
+  .modal label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6b7a99;
+    margin-bottom: 6px;
+    margin-top: 14px;
+  }
+  .modal label:first-of-type { margin-top: 0; }
+  .modal input, .modal select, .modal textarea {
+    width: 100%;
+    background: #0b0e17;
+    border: 1px solid #2a3250;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: #e0e6ed;
+    font-size: 14px;
+    outline: none;
+    font-family: inherit;
+  }
+  .modal textarea { resize: vertical; min-height: 60px; }
+  .modal input:focus, .modal select:focus, .modal textarea:focus { border-color: #4fc3f7; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 22px; justify-content: flex-end; }
+  .form-row { display: flex; gap: 12px; }
+  .form-row > div { flex: 1; }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: #4a5578;
+  }
+  .empty-state h3 { font-size: 18px; color: #6b7a99; margin-bottom: 8px; }
+
+  @media (max-width: 900px) {
+    body { padding: 12px; }
+    header h1 { font-size: 20px; }
+    table { font-size: 13px; display: block; overflow-x: auto; }
+    .catalyst { max-width: 140px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1><span>&#9650;</span> Morning Stock Watchlist</h1>
+  <div class="header-right">
+    <a href="sikand-feed.html" style="background:#161b2e;border:1px solid #2a3250;border-radius:8px;padding:8px 16px;font-size:13px;color:#4fc3f7;text-decoration:none;display:flex;align-items:center;gap:6px;transition:border-color 0.2s;" onmouseover="this.style.borderColor='#4fc3f7'" onmouseout="this.style.borderColor='#2a3250'">
+      🦑 Sikand Feed
+    </a>
+    <div class="date-badge" id="currentDate"></div>
+    <div class="refresh-note">
+      <span class="label">Last Refresh (yfinance)</span>
+      <span class="value" id="lastRefresh"></span>
+    </div>
+  </div>
+</header>
+
+<div class="sessions-bar" id="sessionsBar">
+  <div class="session-card mon" id="sess-mon">
+    <div class="session-header">
+      <span class="session-name">Monday Close</span>
+      <span class="session-next-label">Next</span>
+      <span class="session-live-tag">&#9679; LIVE</span>
+    </div>
+    <div class="session-times">
+      <div class="et">3:00&ndash;4:00 PM ET</div>
+      <div class="aest" id="aest-mon">&nbsp;</div>
+    </div>
+    <div class="session-countdown" id="cd-mon">&mdash;:&mdash;:&mdash;</div>
+    <div class="session-meta">~2x avg intraday volatility &middot; institutional rebalancing</div>
+  </div>
+  <div class="session-card wed" id="sess-wed">
+    <div class="session-header">
+      <span class="session-name">Wed Pre-Market</span>
+      <span class="session-next-label">Next</span>
+      <span class="session-live-tag">&#9679; LIVE</span>
+    </div>
+    <div class="session-times">
+      <div class="et">2:00&ndash;4:00 AM ET</div>
+      <div class="aest" id="aest-wed">&nbsp;</div>
+    </div>
+    <div class="session-countdown" id="cd-wed">&mdash;:&mdash;:&mdash;</div>
+    <div class="session-meta">Strongest window &middot; accelerating over last 12 months</div>
+  </div>
+  <div class="session-card fri" id="sess-fri">
+    <div class="session-header">
+      <span class="session-name">Friday Overnight</span>
+      <span class="session-next-label">Next</span>
+      <span class="session-live-tag">&#9679; LIVE</span>
+    </div>
+    <div class="session-times">
+      <div class="et">12:00&ndash;1:00 AM ET</div>
+      <div class="aest" id="aest-fri">&nbsp;</div>
+    </div>
+    <div class="session-countdown" id="cd-fri">&mdash;:&mdash;:&mdash;</div>
+    <div class="session-meta">End-of-week position closing &middot; moderate strength</div>
+  </div>
+</div>
+
+<div class="poly-section">
+  <div class="poly-section-header">
+    <span class="poly-logo">POLYMARKET</span>
+    <h3>Prediction Market Odds</h3>
+    <a class="poly-link" href="https://polymarket.com" target="_blank" rel="noopener noreferrer">polymarket.com ↗</a>
+  </div>
+  <div class="poly-bar">
+
+    <!-- NDX Daily -->
+    <div class="poly-card" id="poly-ndx">
+      <div class="poly-card-title">
+        <a href="https://polymarket.com/event/ndx-up-or-down-on-april-15-2026" target="_blank" rel="noopener noreferrer" id="poly-ndx-link">
+          NASDAQ 100 · Today Up or Down?
+        </a>
+      </div>
+      <div id="poly-ndx-body"><div class="poly-loading">Fetching odds...</div></div>
+    </div>
+
+    <!-- Recession -->
+    <div class="poly-card" id="poly-rec">
+      <div class="poly-card-title">
+        <a href="https://polymarket.com/event/us-recession-by-end-of-2026" target="_blank" rel="noopener noreferrer">
+          US Recession by End of 2026?
+        </a>
+      </div>
+      <div id="poly-rec-body"><div class="poly-loading">Fetching odds...</div></div>
+    </div>
+
+    <!-- SPX Year-End -->
+    <div class="poly-card" id="poly-spx">
+      <div class="poly-card-title">
+        <a href="https://polymarket.com/event/spx-close-dec-2026" target="_blank" rel="noopener noreferrer">
+          S&amp;P 500 (SPX) · Year-End 2026 Close
+        </a>
+      </div>
+      <div id="poly-spx-body"><div class="poly-loading">Fetching odds...</div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- FARSIDE:START -->
+<div class="farside-section">
+  <div class="farside-section-header">
+    <span class="farside-logo">FARSIDE</span>
+    <h3>Bitcoin ETF Net Flows · Last 10 Days (US$ millions)</h3>
+    <span class="farside-fetched">Fetched 2026-04-25 06:43 AEST</span>
+    <a class="farside-link" href="https://farside.co.uk/btc/" target="_blank" rel="noopener noreferrer">farside.co.uk ↗</a>
+  </div>
+  <div class="farside-wrap">
+<table class="farside">
+  <thead>
+    <tr>
+      <th>Date</th>
+      <th>IBIT</th>
+      <th>FBTC</th>
+      <th>BITB</th>
+      <th>ARKB</th>
+      <th>BTCO</th>
+      <th>EZBC</th>
+      <th>BRRR</th>
+      <th>HODL</th>
+      <th>BTCW</th>
+      <th>MSBT</th>
+      <th>GBTC</th>
+      <th>BTC</th>
+      <th class="total">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+  <tr>
+    <td>13 Apr 2026</td>
+    <td class="pos">34.7</td>
+    <td class="neg">(229.2)</td>
+    <td class="pos">11.9</td>
+    <td class="neg">(62.9)</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="neg">(2.6)</td>
+    <td class="zero">0.0</td>
+    <td class="pos">6.3</td>
+    <td class="neg">(38.2)</td>
+    <td class="neg">(11.0)</td>
+    <td class="total neg">(291.0)</td>
+  </tr>
+  <tr>
+    <td>14 Apr 2026</td>
+    <td class="pos">213.8</td>
+    <td class="pos">45.3</td>
+    <td class="pos">12.5</td>
+    <td class="pos">113.1</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="pos">6.3</td>
+    <td class="zero">0.0</td>
+    <td class="pos">15.5</td>
+    <td class="zero">0.0</td>
+    <td class="pos">4.9</td>
+    <td class="total pos">411.4</td>
+  </tr>
+  <tr>
+    <td>15 Apr 2026</td>
+    <td class="pos">291.9</td>
+    <td class="neg">(47.3)</td>
+    <td class="neg">(8.5)</td>
+    <td class="neg">(42.2)</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="neg">(3.7)</td>
+    <td class="zero">0.0</td>
+    <td class="pos">19.3</td>
+    <td class="neg">(23.4)</td>
+    <td class="zero">0.0</td>
+    <td class="total pos">186.1</td>
+  </tr>
+  <tr>
+    <td>16 Apr 2026</td>
+    <td class="pos">81.7</td>
+    <td class="neg">(36.0)</td>
+    <td class="zero">0.0</td>
+    <td class="neg">(27.4)</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="pos">13.4</td>
+    <td class="neg">(22.3)</td>
+    <td class="pos">16.7</td>
+    <td class="total pos">26.1</td>
+  </tr>
+  <tr>
+    <td>17 Apr 2026</td>
+    <td class="pos">284.0</td>
+    <td class="pos">163.4</td>
+    <td class="pos">38.2</td>
+    <td class="pos">117.9</td>
+    <td class="pos">3.9</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="pos">6.6</td>
+    <td class="zero">0.0</td>
+    <td class="pos">16.6</td>
+    <td class="pos">4.2</td>
+    <td class="pos">29.1</td>
+    <td class="total pos">663.9</td>
+  </tr>
+  <tr>
+    <td>20 Apr 2026</td>
+    <td class="pos">256.0</td>
+    <td class="neg">(6.6)</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="pos">5.8</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="pos">8.1</td>
+    <td class="neg">(24.9)</td>
+    <td class="zero">0.0</td>
+    <td class="total pos">238.4</td>
+  </tr>
+  <tr>
+    <td>21 Apr 2026</td>
+    <td class="pos">39.3</td>
+    <td class="neg">(6.6)</td>
+    <td class="neg">(12.7)</td>
+    <td class="neg">(14.5)</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="neg">(4.3)</td>
+    <td class="zero">0.0</td>
+    <td class="pos">10.8</td>
+    <td class="neg">(17.5)</td>
+    <td class="pos">17.3</td>
+    <td class="total pos">11.8</td>
+  </tr>
+  <tr>
+    <td>22 Apr 2026</td>
+    <td class="pos">246.9</td>
+    <td class="pos">56.7</td>
+    <td class="pos">15.4</td>
+    <td class="pos">11.9</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="pos">3.9</td>
+    <td class="pos">6.3</td>
+    <td class="pos">11.3</td>
+    <td class="neg">(16.6)</td>
+    <td class="zero">0.0</td>
+    <td class="total pos">335.8</td>
+  </tr>
+  <tr>
+    <td>23 Apr 2026</td>
+    <td class="pos">167.5</td>
+    <td class="neg">(16.9)</td>
+    <td class="neg">(7.6)</td>
+    <td class="pos">71.2</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="zero">0.0</td>
+    <td class="neg">(5.5)</td>
+    <td class="zero">0.0</td>
+    <td class="pos">9.4</td>
+    <td class="zero">0.0</td>
+    <td class="pos">5.2</td>
+    <td class="total pos">223.3</td>
+  </tr>
+  <tr>
+    <td>24 Apr 2026</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="zero">–</td>
+    <td class="total zero">0.0</td>
+  </tr>
+  <tr class="summary">
+    <td>Cumulative</td>
+    <td class="pos">65,342</td>
+    <td class="pos">11,045</td>
+    <td class="pos">2,136</td>
+    <td class="pos">1,624</td>
+    <td class="pos">249</td>
+    <td class="pos">375</td>
+    <td class="pos">331</td>
+    <td class="pos">1,164</td>
+    <td class="pos">92</td>
+    <td class="pos">173</td>
+    <td class="neg">(26,215)</td>
+    <td class="pos">2,257</td>
+    <td class="total pos">58,573</td>
+  </tr>
+  </tbody>
+</table>
+  </div>
+</div>
+<!-- FARSIDE:END -->
+
+<div class="summary-bar">
+  <div class="summary-card"><div class="label">Watching</div><div class="value blue" id="totalCount">0</div></div>
+  <div class="summary-card"><div class="label">Gainers</div><div class="value green" id="bullishCount">0</div></div>
+  <div class="summary-card"><div class="label">Losers</div><div class="value red" id="bearishCount">0</div></div>
+  <div class="summary-card"><div class="label">Avg Change</div><div class="value" id="avgChange">—</div></div>
+  <div class="summary-card"><div class="label">Avg Upside to Target</div><div class="value" id="avgUpside">—</div></div>
+</div>
+
+<div class="controls">
+  <input type="text" id="searchBox" placeholder="Search ticker or company..." style="flex:1;min-width:200px;">
+  <select id="sectorFilter"><option value="">All Sectors</option></select>
+  <select id="priorityFilter">
+    <option value="">All Priority</option>
+    <option value="high">High</option>
+    <option value="medium">Medium</option>
+    <option value="low">Low</option>
+  </select>
+  <button class="btn btn-primary" onclick="openModal()">+ Add Stock</button>
+  <button class="btn btn-secondary" onclick="exportCSV()">Export CSV</button>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th onclick="sortTable('ticker')">Ticker</th>
+      <th onclick="sortTable('price')">Price</th>
+      <th onclick="sortTable('change')">Chg %</th>
+      <th>Day Range</th>
+      <th onclick="sortTable('volume')">Volume<br><span style="font-size:9px;color:#4a5578;font-weight:400;text-transform:none;letter-spacing:0;">vs 10d avg</span></th>
+      <th onclick="sortTable('marketCap')">Mkt Cap</th>
+      <th>52w Range</th>
+      <th onclick="sortTable('distFromLow')">52w %</th>
+      <th onclick="sortTable('perf1M')">1M</th>
+      <th onclick="sortTable('perf3M')">3M</th>
+      <th onclick="sortTable('perf6M')">6M</th>
+      <th onclick="sortTable('sector')">Sector</th>
+      <th onclick="sortTable('target')">Target</th>
+      <th>Catalyst / Thesis</th>
+      <th>Pri</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody id="stockBody"></tbody>
+</table>
+
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="modalTitle">Add Stock</h2>
+    <input type="hidden" id="editIndex" value="-1">
+    <div class="form-row">
+      <div><label>Ticker Symbol</label><input type="text" id="fTicker" placeholder="e.g. FLY" style="text-transform:uppercase;"></div>
+      <div><label>Exchange</label><select id="fExchange"><option>NASDAQ</option><option>NYSE</option><option>AMEX</option><option>OTC</option></select></div>
+    </div>
+    <label>Company Name</label>
+    <input type="text" id="fCompany" placeholder="e.g. Firefly Aerospace">
+    <div class="form-row">
+      <div><label>Current Price ($)</label><input type="number" id="fPrice" step="0.01" placeholder="0.00"></div>
+      <div><label>Change %</label><input type="number" id="fChange" step="0.01" placeholder="0.00"></div>
+      <div><label>Prev Close ($)</label><input type="number" id="fPrevClose" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Open ($)</label><input type="number" id="fOpen" step="0.01" placeholder="0.00"></div>
+      <div><label>Day Low ($)</label><input type="number" id="fDayLow" step="0.01" placeholder="0.00"></div>
+      <div><label>Day High ($)</label><input type="number" id="fDayHigh" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="form-row">
+      <div><label>52w Low ($)</label><input type="number" id="f52Low" step="0.01" placeholder="0.00"></div>
+      <div><label>52w High ($)</label><input type="number" id="f52High" step="0.01" placeholder="0.00"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Volume</label><input type="number" id="fVolume" placeholder="e.g. 9580752"></div>
+      <div><label>Avg Vol (10d)</label><input type="number" id="fAvgVolume" placeholder="e.g. 8758950"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Market Cap ($)</label><input type="number" id="fMarketCap" placeholder="e.g. 6097384960"></div>
+      <div><label>Price Target ($)</label><input type="number" id="fTarget" step="0.01" placeholder="0.00"></div>
+    </div>
+    <label>Sector</label>
+    <input type="text" id="fSector" placeholder="e.g. Aerospace & Defense">
+    <label>Catalyst / Thesis</label>
+    <textarea id="fCatalyst" placeholder="Key catalysts, upcoming events, or investment thesis..."></textarea>
+    <label>Priority</label>
+    <select id="fPriority"><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveStock()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let stocks = [];
+let sortCol = null;
+let sortAsc = true;
+
+// --- Data fetched via yfinance ---
+const LAST_REFRESH = "2026-04-25 06:43 AEST";
+const defaultStocks = [
+  { ticker: "FLY", company: "Firefly Aerospace Inc.", exchange: "NGM", price: 35.13, change: -8.85, prevClose: 38.54, open: 39.18, dayHigh: 39.31, dayLow: 35.0, fiftyTwoHigh: 73.8, fiftyTwoLow: 16.0, volume: 4922842, avgVolume: 6540340, marketCap: 5624531456, sector: "Industrials", target: 0.0, perf1M: 31.03, perf3M: 20.6, perf6M: 27.79, catalyst: "", priority: "medium" },
+  { ticker: "SPIR", company: "Spire Global, Inc.", exchange: "NYQ", price: 16.51, change: -5.87, prevClose: 17.54, open: 17.5, dayHigh: 18.01, dayLow: 16.23, fiftyTwoHigh: 23.59, fiftyTwoLow: 6.6, volume: 1589181, avgVolume: 3152060, marketCap: 636126400, sector: "Industrials", target: 0.0, perf1M: 22.39, perf3M: 27.1, perf6M: 41.47, catalyst: "", priority: "medium" },
+  { ticker: "SATL", company: "Satellogic Inc.", exchange: "NCM", price: 6.17, change: -9.4, prevClose: 6.81, open: 6.93, dayHigh: 7.0, dayLow: 6.02, fiftyTwoHigh: 8.35, fiftyTwoLow: 1.25, volume: 7804836, avgVolume: 10561790, marketCap: 882671808, sector: "Industrials", target: 0.0, perf1M: -3.89, perf3M: 17.52, perf6M: 202.45, catalyst: "", priority: "medium" },
+  { ticker: "SIDU", company: "Sidus Space, Inc.", exchange: "NCM", price: 3.42, change: -7.82, prevClose: 3.71, open: 3.72, dayHigh: 3.76, dayLow: 3.18, fiftyTwoHigh: 5.99, fiftyTwoLow: 0.63, volume: 22507090, avgVolume: 35469030, marketCap: 268918176, sector: "Industrials", target: 0.0, perf1M: 26.67, perf3M: -20.65, perf6M: 185.0, catalyst: "", priority: "medium" },
+  { ticker: "AAOI", company: "Applied Optoelectronics, Inc.", exchange: "NGM", price: 162.17, change: 17.74, prevClose: 137.73, open: 142.12, dayHigh: 164.87, dayLow: 140.0, fiftyTwoHigh: 173.41, fiftyTwoLow: 11.87, volume: 13676336, avgVolume: 10770390, marketCap: 12596574208, sector: "Technology", target: 0.0, perf1M: 66.46, perf3M: 354.0, perf6M: 335.71, catalyst: "", priority: "medium" },
+  { ticker: "BE", company: "Bloom Energy Corporation", exchange: "NYQ", price: 231.17, change: -2.69, prevClose: 237.57, open: 240.56, dayHigh: 242.2, dayLow: 231.02, fiftyTwoHigh: 242.2, fiftyTwoLow: 16.05, volume: 6502289, avgVolume: 11364880, marketCap: 65698684928, sector: "Industrials", target: 0.0, perf1M: 73.14, perf3M: 59.55, perf6M: 113.0, catalyst: "Solid-oxide fuel cells for clean power generation; data centre & grid-scale deployments; +1213% from 52w low of $16.01", priority: "medium" },
+  { ticker: "MU", company: "Micron Technology, Inc.", exchange: "NMS", price: 496.72, change: 3.11, prevClose: 481.72, open: 496.1, dayHigh: 506.99, dayLow: 489.36, fiftyTwoHigh: 506.99, fiftyTwoLow: 73.5, volume: 35189372, avgVolume: 37709480, marketCap: 560168042496, sector: "Technology", target: 0.0, perf1M: 39.8, perf3M: 24.34, perf6M: 125.87, catalyst: "Leading DRAM & NAND flash memory; HBM3E for AI accelerators; near 52w high; +597% from 52w low", priority: "medium" },
+  { ticker: "ASTS", company: "AST SpaceMobile, Inc.", exchange: "NMS", price: 76.4, change: -2.98, prevClose: 78.75, open: 79.0, dayHigh: 79.6, dayLow: 75.95, fiftyTwoHigh: 129.89, fiftyTwoLow: 22.07, volume: 11609528, avgVolume: 21352330, marketCap: 22357469184, sector: "Technology", target: 0.0, perf1M: -13.04, perf3M: -32.73, perf6M: -3.84, catalyst: "", priority: "medium" },
+  { ticker: "INTC", company: "Intel Corporation", exchange: "NMS", price: 82.54, change: 23.6, prevClose: 66.78, open: 82.13, dayHigh: 85.22, dayLow: 79.62, fiftyTwoHigh: 85.22, fiftyTwoLow: 18.97, volume: 279142137, avgVolume: 107132710, marketCap: 414434197504, sector: "Technology", target: 0.0, perf1M: 87.17, perf3M: 83.14, perf6M: 108.75, catalyst: "", priority: "medium" },
+  { ticker: "AVEX", company: "AEVEX Corp.", exchange: "NYQ", price: 29.7, change: -6.52, prevClose: 31.77, open: 31.26, dayHigh: 31.45, dayLow: 28.66, fiftyTwoHigh: 42.34, fiftyTwoLow: 23.0, volume: 2434804, avgVolume: 9632680, marketCap: 1507102080, sector: "Industrials", target: 0.0, perf1M: null, perf3M: null, perf6M: null, catalyst: "Defense drones incl. Phoenix Ghost one-way attack aircraft; IPO'd NYSE 17 Apr 2026 at $20; 2025 rev $433M (~78% DoD); Madison Dearborn-backed", priority: "medium" }
+];
+
+function init() {
+  stocks = [...defaultStocks];
+  updateDate();
+  render();
+}
+
+function fmtNum(n) {
+  if (!n || n === 0) return '—';
+  if (n >= 1e12) return '$' + (n/1e12).toFixed(2) + 'T';
+  if (n >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return '$' + (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + n.toFixed(2);
+}
+
+function fmtVol(n) {
+  if (!n || n === 0) return '—';
+  if (n >= 1e9) return (n/1e9).toFixed(2) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(2) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toString();
+}
+
+function fmtPerf(v) {
+  if (v === null || v === undefined || isNaN(v)) return '<span class="range-text">—</span>';
+  const cls = v > 0 ? 'change-pos' : v < 0 ? 'change-neg' : '';
+  const sign = v > 0 ? '+' : '';
+  return `<span class="${cls}">${sign}${v.toFixed(1)}%</span>`;
+}
+
+function updateDate() {
+  const d = new Date();
+  const opts = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+  document.getElementById('currentDate').textContent = d.toLocaleDateString('en-US', opts);
+  document.getElementById('lastRefresh').textContent = LAST_REFRESH;
+}
+
+function rangeBar(low, high, current) {
+  if (!low || !high || !current || high === low) return '<span class="range-text">—</span>';
+  const pct = Math.max(0, Math.min(100, ((current - low) / (high - low)) * 100));
+  return `<span class="range-text">$${low.toFixed(2)} — $${high.toFixed(2)}</span>
+    <div class="range-bar-wrap">
+      <div class="range-bar-fill" style="width:100%"></div>
+      <div class="range-dot" style="left:${pct}%"></div>
+    </div>`;
+}
+
+function volBadge(vol, avg) {
+  if (!vol || !avg) return '';
+  const ratio = vol / avg;
+  let cls = 'vol-normal', label = '1.0x';
+  if (ratio >= 1.5) { cls = 'vol-high'; label = ratio.toFixed(1) + 'x'; }
+  else if (ratio < 0.7) { cls = 'vol-low'; label = ratio.toFixed(1) + 'x'; }
+  else { label = ratio.toFixed(1) + 'x'; }
+  return `<span class="vol-ratio ${cls}">${label}</span>`;
+}
+
+function render() {
+  const search = document.getElementById('searchBox').value.toLowerCase();
+  const sectorF = document.getElementById('sectorFilter').value;
+  const prioF = document.getElementById('priorityFilter').value;
+
+  let filtered = stocks.filter(s => {
+    const matchSearch = !search || s.ticker.toLowerCase().includes(search) || s.company.toLowerCase().includes(search);
+    const matchSector = !sectorF || s.sector === sectorF;
+    const matchPrio = !prioF || s.priority === prioF;
+    return matchSearch && matchSector && matchPrio;
+  });
+
+  if (sortCol) {
+    filtered.sort((a, b) => {
+      let va, vb;
+      if (sortCol === 'distFromLow') {
+        va = (a.price && a.fiftyTwoLow) ? (a.price - a.fiftyTwoLow) / a.fiftyTwoLow * 100 : -9999;
+        vb = (b.price && b.fiftyTwoLow) ? (b.price - b.fiftyTwoLow) / b.fiftyTwoLow * 100 : -9999;
+      } else {
+        va = a[sortCol]; vb = b[sortCol];
+      }
+      if (typeof va === 'number' && typeof vb === 'number') return sortAsc ? va - vb : vb - va;
+      va = String(va).toLowerCase(); vb = String(vb).toLowerCase();
+      return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+    });
+  }
+
+  // Summary
+  document.getElementById('totalCount').textContent = stocks.length;
+  const bullish = stocks.filter(s => s.change > 0).length;
+  const bearish = stocks.filter(s => s.change < 0).length;
+  document.getElementById('bullishCount').textContent = bullish;
+  document.getElementById('bearishCount').textContent = bearish;
+
+  if (stocks.length) {
+    const avgChg = stocks.reduce((s, x) => s + (x.change || 0), 0) / stocks.length;
+    const el = document.getElementById('avgChange');
+    el.textContent = (avgChg >= 0 ? '+' : '') + avgChg.toFixed(2) + '%';
+    el.className = 'value ' + (avgChg >= 0 ? 'green' : 'red');
+  }
+
+  const withTargets = stocks.filter(s => s.target > 0 && s.price > 0);
+  if (withTargets.length) {
+    const avg = withTargets.reduce((sum, s) => sum + ((s.target - s.price) / s.price * 100), 0) / withTargets.length;
+    const el = document.getElementById('avgUpside');
+    el.textContent = (avg >= 0 ? '+' : '') + avg.toFixed(1) + '%';
+    el.className = 'value ' + (avg >= 0 ? 'green' : 'red');
+  } else {
+    document.getElementById('avgUpside').textContent = '—';
+    document.getElementById('avgUpside').className = 'value';
+  }
+
+  // Sector filter
+  const sectors = [...new Set(stocks.map(s => s.sector).filter(Boolean))].sort();
+  const sf = document.getElementById('sectorFilter');
+  const currentSector = sf.value;
+  sf.innerHTML = '<option value="">All Sectors</option>' + sectors.map(s => `<option${s===currentSector?' selected':''}>${s}</option>`).join('');
+
+  // Rows
+  const body = document.getElementById('stockBody');
+  if (!filtered.length) {
+    body.innerHTML = `<tr><td colspan="16"><div class="empty-state"><h3>No stocks found</h3><p>Add your first stock or adjust filters.</p></div></td></tr>`;
+    return;
+  }
+
+  body.innerHTML = filtered.map(s => {
+    const realIdx = stocks.indexOf(s);
+    const prioClass = s.priority === 'high' ? 'priority-high' : s.priority === 'medium' ? 'priority-med' : 'priority-low';
+    const changeClass = s.change > 0 ? 'change-pos' : s.change < 0 ? 'change-neg' : '';
+    const changeStr = s.change > 0 ? '+' + s.change.toFixed(2) + '%' : s.change < 0 ? s.change.toFixed(2) + '%' : '0.00%';
+    const priceStr = s.price > 0 ? '$' + s.price.toFixed(2) : '—';
+    const targetStr = s.target > 0 ? '$' + s.target.toFixed(2) : '—';
+
+    return `<tr class="${prioClass}">
+      <td>
+        <span class="ticker">${s.ticker}</span><span class="exchange-badge">${s.exchange}</span><br>
+        <span class="company">${s.company}</span>
+      </td>
+      <td class="price">${priceStr}<br><span class="range-text">Prev: $${(s.prevClose||0).toFixed(2)}</span></td>
+      <td class="${changeClass}">${changeStr}</td>
+      <td>${rangeBar(s.dayLow, s.dayHigh, s.price)}</td>
+      <td>
+        <div class="vol-bar">${fmtVol(s.volume)} ${volBadge(s.volume, s.avgVolume)}</div>
+        <span class="range-text">Avg: ${fmtVol(s.avgVolume)}</span>
+      </td>
+      <td>${fmtNum(s.marketCap)}</td>
+      <td>${rangeBar(s.fiftyTwoLow, s.fiftyTwoHigh, s.price)}</td>
+      <td class="dist-col">${(() => {
+        if (!s.fiftyTwoLow || !s.fiftyTwoHigh || !s.price) return '—';
+        const fromLow = ((s.price - s.fiftyTwoLow) / s.fiftyTwoLow * 100).toFixed(1);
+        const fromHigh = ((s.price - s.fiftyTwoHigh) / s.fiftyTwoHigh * 100).toFixed(1);
+        return `<span class="dist-from-low">+${fromLow}%</span><span class="dist-label">from low</span><span class="dist-from-high">${fromHigh}%</span><span class="dist-label">from high</span>`;
+      })()}</td>
+      <td class="price">${fmtPerf(s.perf1M)}</td>
+      <td class="price">${fmtPerf(s.perf3M)}</td>
+      <td class="price">${fmtPerf(s.perf6M)}</td>
+      <td><span class="sector-badge">${s.sector || '—'}</span></td>
+      <td class="target">${targetStr}</td>
+      <td class="catalyst">${s.catalyst || '—'}</td>
+      <td><span class="sector-badge">${s.priority.toUpperCase()}</span></td>
+      <td><div class="actions-cell">
+        <button onclick="editStock(${realIdx})" title="Edit">&#9998;</button>
+        <button class="del" onclick="deleteStock(${realIdx})" title="Delete">&#10005;</button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+function sortTable(col) {
+  if (sortCol === col) sortAsc = !sortAsc;
+  else { sortCol = col; sortAsc = true; }
+  render();
+}
+
+function openModal(idx) {
+  document.getElementById('editIndex').value = idx !== undefined ? idx : -1;
+  document.getElementById('modalTitle').textContent = idx !== undefined ? 'Edit Stock' : 'Add Stock';
+  if (idx !== undefined) {
+    const s = stocks[idx];
+    document.getElementById('fTicker').value = s.ticker;
+    document.getElementById('fCompany').value = s.company;
+    document.getElementById('fExchange').value = s.exchange;
+    document.getElementById('fPrice').value = s.price || '';
+    document.getElementById('fChange').value = s.change || '';
+    document.getElementById('fPrevClose').value = s.prevClose || '';
+    document.getElementById('fOpen').value = s.open || '';
+    document.getElementById('fDayLow').value = s.dayLow || '';
+    document.getElementById('fDayHigh').value = s.dayHigh || '';
+    document.getElementById('f52Low').value = s.fiftyTwoLow || '';
+    document.getElementById('f52High').value = s.fiftyTwoHigh || '';
+    document.getElementById('fVolume').value = s.volume || '';
+    document.getElementById('fAvgVolume').value = s.avgVolume || '';
+    document.getElementById('fMarketCap').value = s.marketCap || '';
+    document.getElementById('fTarget').value = s.target || '';
+    document.getElementById('fSector').value = s.sector || '';
+    document.getElementById('fCatalyst').value = s.catalyst || '';
+    document.getElementById('fPriority').value = s.priority || 'medium';
+  } else {
+    document.querySelectorAll('.modal input, .modal textarea').forEach(el => el.value = '');
+    document.getElementById('fExchange').value = 'NASDAQ';
+    document.getElementById('fPriority').value = 'medium';
+  }
+  document.getElementById('modalOverlay').classList.add('active');
+  document.getElementById('fTicker').focus();
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+}
+
+function saveStock() {
+  const ticker = document.getElementById('fTicker').value.trim().toUpperCase();
+  if (!ticker) { alert('Ticker is required'); return; }
+
+  const data = {
+    ticker,
+    company: document.getElementById('fCompany').value.trim(),
+    exchange: document.getElementById('fExchange').value,
+    price: parseFloat(document.getElementById('fPrice').value) || 0,
+    change: parseFloat(document.getElementById('fChange').value) || 0,
+    prevClose: parseFloat(document.getElementById('fPrevClose').value) || 0,
+    open: parseFloat(document.getElementById('fOpen').value) || 0,
+    dayLow: parseFloat(document.getElementById('fDayLow').value) || 0,
+    dayHigh: parseFloat(document.getElementById('fDayHigh').value) || 0,
+    fiftyTwoLow: parseFloat(document.getElementById('f52Low').value) || 0,
+    fiftyTwoHigh: parseFloat(document.getElementById('f52High').value) || 0,
+    volume: parseInt(document.getElementById('fVolume').value) || 0,
+    avgVolume: parseInt(document.getElementById('fAvgVolume').value) || 0,
+    marketCap: parseInt(document.getElementById('fMarketCap').value) || 0,
+    target: parseFloat(document.getElementById('fTarget').value) || 0,
+    sector: document.getElementById('fSector').value.trim(),
+    catalyst: document.getElementById('fCatalyst').value.trim(),
+    priority: document.getElementById('fPriority').value
+  };
+
+  const idx = parseInt(document.getElementById('editIndex').value);
+  if (idx >= 0) stocks[idx] = data;
+  else stocks.push(data);
+
+  closeModal();
+  render();
+}
+
+function editStock(idx) { openModal(idx); }
+
+function deleteStock(idx) {
+  if (confirm('Remove ' + stocks[idx].ticker + ' from watchlist?')) {
+    stocks.splice(idx, 1);
+    render();
+  }
+}
+
+function exportCSV() {
+  const headers = ['Ticker','Company','Exchange','Price','Change%','PrevClose','Open','DayLow','DayHigh','52wLow','52wHigh','Volume','AvgVolume','MarketCap','1M%','3M%','6M%','Target','Sector','Catalyst','Priority'];
+  const rows = stocks.map(s => [
+    s.ticker, `"${s.company}"`, s.exchange, s.price, s.change, s.prevClose, s.open,
+    s.dayLow, s.dayHigh, s.fiftyTwoLow, s.fiftyTwoHigh, s.volume, s.avgVolume,
+    s.marketCap, s.perf1M ?? '', s.perf3M ?? '', s.perf6M ?? '',
+    s.target, `"${s.sector}"`, `"${(s.catalyst||'').replace(/"/g,'""')}"`, s.priority
+  ]);
+  const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'watchlist-' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+}
+
+document.getElementById('searchBox').addEventListener('input', render);
+document.getElementById('sectorFilter').addEventListener('change', render);
+document.getElementById('priorityFilter').addEventListener('change', render);
+
+// --- Session Countdown Logic (DST-safe, ET → AEST) ---
+const SESSIONS = [
+  { id: 'mon', dow: 1, startH: 15, startM: 0, endH: 16, endM: 0 },
+  { id: 'wed', dow: 3, startH: 2,  startM: 0, endH: 4,  endM: 0 },
+  { id: 'fri', dow: 5, startH: 0,  startM: 0, endH: 1,  endM: 0 }
+];
+
+function nyToUTC(y, m, d, h, mi) {
+  const guessMs = Date.UTC(y, m - 1, d, h, mi);
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit'
+  }).formatToParts(new Date(guessMs)).reduce((a, p) => (a[p.type] = p.value, a), {});
+  const nyShowsAsMs = Date.UTC(
+    +parts.year, +parts.month - 1, +parts.day,
+    (+parts.hour) % 24, +parts.minute
+  );
+  return new Date(guessMs + (guessMs - nyShowsAsMs));
+}
+
+function nextOccurrenceNY(targetDow, h, mi) {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric', month: '2-digit', day: '2-digit'
+  }).formatToParts(now).reduce((a, p) => (a[p.type] = p.value, a), {});
+  const y = +parts.year, m = +parts.month, d = +parts.day;
+  const dowMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  for (let i = 0; i < 8; i++) {
+    const cand = nyToUTC(y, m, d + i, h, mi);
+    const dowName = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York', weekday: 'short'
+    }).format(cand);
+    if (dowMap[dowName] === targetDow && cand.getTime() > now.getTime()) return cand;
+  }
+  return null;
+}
+
+function formatSydneyRange(startDate, endDate) {
+  const fmt = new Intl.DateTimeFormat('en-AU', {
+    timeZone: 'Australia/Sydney',
+    weekday: 'short', hour: 'numeric', minute: '2-digit', hour12: true
+  });
+  const startParts = fmt.formatToParts(startDate).reduce((a,p)=>(a[p.type]=p.value,a),{});
+  const endParts = fmt.formatToParts(endDate).reduce((a,p)=>(a[p.type]=p.value,a),{});
+  const sameDay = startParts.weekday === endParts.weekday;
+  const startStr = `${startParts.hour}:${startParts.minute} ${startParts.dayPeriod.toUpperCase()}`;
+  const endStr = `${endParts.hour}:${endParts.minute} ${endParts.dayPeriod.toUpperCase()}`;
+  if (sameDay) return `${startParts.weekday} ${startStr}–${endStr} AEST`;
+  return `${startParts.weekday} ${startStr} → ${endParts.weekday} ${endStr} AEST`;
+}
+
+function fmtCountdown(ms) {
+  if (ms < 0) ms = 0;
+  const d = Math.floor(ms / 86400000);
+  const h = Math.floor((ms % 86400000) / 3600000);
+  const m = Math.floor((ms % 3600000) / 60000);
+  const s = Math.floor((ms % 60000) / 1000);
+  const pad = n => String(n).padStart(2, '0');
+  if (d > 0) return `${d}d ${pad(h)}:${pad(m)}:${pad(s)}`;
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
+
+function updateSessions() {
+  const now = Date.now();
+  SESSIONS.forEach(s => {
+    const nextStart = nextOccurrenceNY(s.dow, s.startH, s.startM);
+    const nextEnd = nextOccurrenceNY(s.dow, s.endH, s.endM);
+    const card = document.getElementById('sess-' + s.id);
+    const cdEl = document.getElementById('cd-' + s.id);
+    const aestEl = document.getElementById('aest-' + s.id);
+    const isLive = nextEnd.getTime() < nextStart.getTime();
+
+    if (isLive) {
+      card.classList.add('live');
+      const remaining = nextEnd.getTime() - now;
+      cdEl.textContent = 'ends ' + fmtCountdown(remaining);
+      const thisWeekStart = new Date(nextStart.getTime() - 7 * 86400000);
+      aestEl.textContent = formatSydneyRange(thisWeekStart, nextEnd);
+    } else {
+      card.classList.remove('live');
+      const remaining = nextStart.getTime() - now;
+      cdEl.textContent = fmtCountdown(remaining);
+      aestEl.textContent = formatSydneyRange(nextStart, nextEnd);
+    }
+  });
+}
+
+updateSessions();
+setInterval(updateSessions, 1000);
+
+// --- Polymarket: Hybrid approach ---
+const CLOB = 'https://clob.polymarket.com';
+
+const POLY_DATA = {
+  ndx: {
+    slug: "ndx-up-or-down-on-april-22-2026",
+    upToken:   "89370454438409859546165984992198069750745819877193350951420562495237752031848",
+    downToken: "47014924823548872867403791658182049918869588466647258933046986417748751991994",
+    upPrice: "0.61", downPrice: "0.39"
+  },
+  recession: {
+    yesToken: "100379208559626151022751801118534484742123694725746262280150222742563282755057",
+    noToken:  "113732820231608904682346496304917888352004831436510840986547065248348999143469",
+    yesPrice: "0.265", noPrice: "0.735"
+  },
+  spx: [
+    { label: "<$6,000",      token: "109916013757824662007601798440979979574910555306434264115363209395319896397047", price: "0.19"  },
+    { label: "$6,000-$6,500",token: "2792788123288811403203119454272357584093254846729813538222043676839593916191",  price: "0.185" },
+    { label: "$6,500-$7,000",token: "8589418029274408703067328078690685911409743653092120233975277721439553579419",   price: "0.215" },
+    { label: "$7,000-$7,500",token: "90435202834773196240993315892657468525997405548318079246131622571451534760684",  price: "0.23"  },
+    { label: "$7,500-$8,000",token: "39088321585602927057502055965891543549721680408946039840513470893669801966110",  price: "0.12"  },
+    { label: ">$8,000",      token: "35722338205853802518085116814984659124732900520664344115044744032497983004870",  price: "0.225" }
+  ],
+  fetched: "2026-04-22 09:15 AEST"
+};
+
+async function fetchMidpoint(token) {
+  const r = await fetch(`${CLOB}/book?token_id=${token}`);
+  if (!r.ok) throw new Error('book fetch failed');
+  const d = await r.json();
+  const bids = d.bids || [];
+  const asks = d.asks || [];
+  const bestBid = bids.length ? Math.max(...bids.map(b => parseFloat(b.price))) : null;
+  const bestAsk = asks.length ? Math.min(...asks.map(a => parseFloat(a.price))) : null;
+  if (bestBid !== null && bestAsk !== null) return (bestBid + bestAsk) / 2;
+  throw new Error('no book data');
+}
+
+function pct(v) { return Math.round(parseFloat(v) * 100); }
+
+function renderNDXCard(upProb, downProb) {
+  document.getElementById('poly-ndx-link').href = `https://polymarket.com/event/${POLY_DATA.ndx.slug}`;
+  document.getElementById('poly-ndx-body').innerHTML = `
+    <div class="poly-main-row">
+      <div class="poly-outcome up"><div class="pct">${upProb}%</div><div class="label">↑ Up</div></div>
+      <div class="poly-outcome down"><div class="pct">${downProb}%</div><div class="label">↓ Down</div></div>
+    </div>
+    <div class="poly-prob-bar"><div class="poly-prob-fill" style="width:${upProb}%"></div></div>
+    <div class="poly-meta"><span>Resolves today</span><span style="color:#4fc3f7;font-size:9px">● LIVE</span></div>`;
+}
+
+function renderRecCard(yesProb, noProb) {
+  document.getElementById('poly-rec-body').innerHTML = `
+    <div class="poly-main-row">
+      <div class="poly-outcome yes"><div class="pct">${yesProb}%</div><div class="label">Yes</div></div>
+      <div class="poly-outcome no"><div class="pct">${noProb}%</div><div class="label">No</div></div>
+    </div>
+    <div class="poly-prob-bar"><div class="poly-prob-fill bearish" style="width:${yesProb}%"></div></div>
+    <div class="poly-meta"><span>Resolves Jan 2027</span><span style="color:#4fc3f7;font-size:9px">● LIVE</span></div>`;
+}
+
+function renderSPXCard(buckets) {
+  const maxProb = Math.max(...buckets.map(b => b.prob));
+  const rows = buckets.map(b => `
+    <div class="spx-bucket-row">
+      <span class="spx-bucket-label">${b.label}</span>
+      <div class="spx-bucket-bar-wrap">
+        <div class="spx-bucket-fill ${b.prob === maxProb ? 'leading' : ''}" style="width:${Math.max(b.prob * 2.2, 6)}%">
+          <span class="spx-bucket-pct">${b.prob}%</span>
+        </div>
+      </div>
+    </div>`).join('');
+  document.getElementById('poly-spx-body').innerHTML = `
+    <div class="spx-buckets">${rows}</div>
+    <div class="poly-meta"><span>Resolves Dec 2026</span><span style="color:#4fc3f7;font-size:9px">● LIVE</span></div>`;
+}
+
+function showBakedPrices() {
+  renderNDXCard(pct(POLY_DATA.ndx.upPrice), pct(POLY_DATA.ndx.downPrice));
+  renderRecCard(pct(POLY_DATA.recession.yesPrice), pct(POLY_DATA.recession.noPrice));
+  renderSPXCard(POLY_DATA.spx.map(b => ({ label: b.label, prob: pct(b.price) })));
+}
+
+async function refreshLivePrices() {
+  try {
+    const [ndxUp, recYes, ...spxMids] = await Promise.all([
+      fetchMidpoint(POLY_DATA.ndx.upToken),
+      fetchMidpoint(POLY_DATA.recession.yesToken),
+      ...POLY_DATA.spx.map(b => fetchMidpoint(b.token))
+    ]);
+    const ndxUpP  = Math.round(ndxUp  * 100);
+    const recYesP = Math.round(recYes * 100);
+    renderNDXCard(ndxUpP, 100 - ndxUpP);
+    renderRecCard(recYesP, 100 - recYesP);
+    renderSPXCard(POLY_DATA.spx.map((b, i) => ({ label: b.label, prob: Math.round(spxMids[i] * 100) })));
+  } catch (err) {
+    console.warn('Polymarket CLOB live refresh failed:', err);
+    document.querySelectorAll('.poly-meta span[style]').forEach(el => {
+      el.textContent = '(cached ' + POLY_DATA.fetched + ')';
+      el.removeAttribute('style');
+    });
+  }
+}
+
+showBakedPrices();
+refreshLivePrices();
+
+init();
+</script>
+</body>
+</html>
