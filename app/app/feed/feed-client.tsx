@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { buildTickerCounts, buildTickerOverlap, colorByAuthor } from "../lib/overlap";
 import type { AuthorKey, AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
+import { useRouter } from 'next/navigation';
 
 type Tab = "all" | AuthorKey | "overlap";
 type Filter = "all" | "tickers" | "hot";
@@ -10,7 +11,6 @@ type Filter = "all" | "tickers" | "hot";
 type FeedClientProps = {
   authors: readonly AuthorProfile[];
   tweetsByAuthor: Record<AuthorKey, readonly Tweet[]>;
-import { useRouter } from 'next/navigation';
 };
 
 const authorNames: Record<AuthorKey, string> = {
