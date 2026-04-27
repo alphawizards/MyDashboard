@@ -134,8 +134,9 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
           disabled={refreshing}
           style={{ opacity: refreshing ? 0.6 : 1 }}        >
           {refreshing ? '⟳ Refreshing...' : '↻ Refresh Feed'}
-        <span className="refresh-timestamp" style={{ fontSize: '0.85rem', color: '#8b94a8' }}>          Last updated: {lastRefreshTime}
-        </span>
+        <span className="refresh-timestamp" style={{ fontSize: '0.85rem', color: '#8b94a8' }}>
+          Last updated: {lastRefreshTime}
+        </span>        </span>
         </div>
         </button>
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
