@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { authors, tweetsByAuthor as staticTweetsByAuthor } from "../lib/static-data";
 import { FeedClient } from "./feed-client";
-import { fetchAllTweets, isXConfigured } from "../lib/x/server";
+import { fetchAllTweets, isXConfigured } from "@/lib/x/server";
 
 // Revalidate this page at most every 30 minutes in the background.
 // The Refresh button forces an immediate revalidation via /api/refresh/all.
