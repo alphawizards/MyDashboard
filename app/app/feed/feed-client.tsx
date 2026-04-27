@@ -153,6 +153,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
         <button className={`tab-btn ${tab === "overlap" ? "active" : ""}`} onClick={() => selectTab("overlap")}>
         {'Overlap '}<span className="count">{sharedOverlap.length}</span>
         </button>
+          </div>
       </nav>
 
       {tab === "overlap" ? (
