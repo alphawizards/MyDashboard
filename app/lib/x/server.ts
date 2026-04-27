@@ -1,5 +1,5 @@
 import 'server-only';
-import type { AuthorKey, Tweet } from '../app/lib/types';
+import type { AuthorKey, Tweet } from '@/app/lib/types';
 
 export function isXConfigured(): boolean {
   return Boolean(process.env.X_BEARER_TOKEN);
