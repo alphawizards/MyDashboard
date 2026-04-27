@@ -7,11 +7,10 @@ export default function PortfoliosPage() {
     <main className="app-shell">
       <header className="page-header">
         <div>
-          <p className="eyebrow">Autopilot portfolios</p>
+          <p className="eyebrow">Tracked account portfolios</p>
           <h1>Portfolio Tracker</h1>
           <p className="subtitle">
-            Tracks Autopilot portfolios from Michael Sikand and Peter Wolff. Sikand is populated from the
-            screenshots; Wolff is ready for the next data drop.
+            Tracks known holdings and watchlists from the X accounts followed on this dashboard.
           </p>
         </div>
         <nav className="nav-actions" aria-label="Dashboard navigation">
