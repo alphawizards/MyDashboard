@@ -10,6 +10,7 @@ type Filter = "all" | "tickers" | "hot";
 type FeedClientProps = {
   authors: readonly AuthorProfile[];
   tweetsByAuthor: Record<AuthorKey, readonly Tweet[]>;
+import { useRouter } from 'next/navigation';
 };
 
 const authorNames: Record<AuthorKey, string> = {
@@ -48,6 +49,21 @@ export function FeedClient({ authors, tweetsByAuthor }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
+  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await fetch('/api/refresh/all', { method: 'POST' });
+      // Force Next.js to re-render this RSC with fresh data from the server
+      router.refresh();
+    } catch (err) {
+      console.error('Refresh failed:', err);
+    } finally {
+      setRefreshing(false);
+    }
+  }
   const [tickerFilter, setTickerFilter] = useState<string | null>(null);
   const authorByKey = useMemo(
     () => Object.fromEntries(authors.map((author) => [author.key, author])) as Record<AuthorKey, AuthorProfile>,
@@ -110,6 +126,14 @@ export function FeedClient({ authors, tweetsByAuthor }: FeedClientProps) {
       </section>
 
       <nav className="tab-bar" aria-label="Feed tabs">
+        <button
+          className="tab-btn refresh-btn"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          style={{ marginRight: 'auto', opacity: refreshing ? 0.6 : 1 }}
+        >
+          {refreshing ? '⟳ Refreshing...' : '↻ Refresh Feed'}
+        </button>
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
           All Feed <span className="count">{allTweets.length}</span>
         </button>
