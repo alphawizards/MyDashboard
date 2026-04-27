@@ -11,6 +11,7 @@ type Filter = "all" | "tickers" | "hot";
 type FeedClientProps = {
   authors: readonly AuthorProfile[];
   tweetsByAuthor: Record<AuthorKey, readonly Tweet[]>;
+  lastRefreshTime: string;
 };
 
 const authorNames: Record<AuthorKey, string> = {
@@ -45,7 +46,7 @@ function safeOpen(url: string) {
   }
 }
 
-export function FeedClient({ authors, tweetsByAuthor }: FeedClientProps) {
+export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -133,6 +134,9 @@ export function FeedClient({ authors, tweetsByAuthor }: FeedClientProps) {
           style={{ marginRight: 'auto', opacity: refreshing ? 0.6 : 1 }}
         >
           {refreshing ? '⟳ Refreshing...' : '↻ Refresh Feed'}
+        <span className="refresh-timestamp" style={{ fontSize: '0.85rem', color: '#8b94a8', marginLeft: '12px' }}>
+          Last updated: {lastRefreshTime}
+        </span>
         </button>
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
           All Feed <span className="count">{allTweets.length}</span>
