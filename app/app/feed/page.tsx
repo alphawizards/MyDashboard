@@ -12,6 +12,7 @@ export default async function FeedPage() {
   // fall back gracefully to the static snapshot so the page always renders.
   let tweetsByAuthor = staticTweetsByAuthor as Record<string, readonly { id: string; text: string; created_at: string; likes: number; retweets: number; replies: number; cashtags: string[]; url: string; }[]>;
   let dataSource: "live" | "static" = "static";
+    let lastRefreshTime = 'Not available';
 
   if (isXConfigured()) {
     try {
@@ -21,8 +22,7 @@ export default async function FeedPage() {
       if (totalLive > 0) {
         tweetsByAuthor = live;
         dataSource = "live";
-  let lastRefreshTime = new Date().toLocaleString('en-AU', {
-    timeZone: 'Australia/Brisbane',
+    lastRefreshTime = new Date().toLocaleString('en-AU', {    timeZone: 'Australia/Brisbane',
     dateStyle: 'medium',
     timeStyle: 'short',
   }) + ' AEST';
