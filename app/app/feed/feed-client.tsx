@@ -161,17 +161,16 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
         <>
           <div className="filter-bar">
             <button className={`filter-btn ${filter === "all" ? "active" : ""}`} onClick={() => setFilter("all")}>
-              All
+            {'All'}
             </button>
             <button
               className={`filter-btn ${filter === "tickers" ? "active" : ""}`}
               onClick={() => setFilter("tickers")}
             >
-              Stock Mentions
+              {'Stock Mentions'}
             </button>
             <button className={`filter-btn ${filter === "hot" ? "active" : ""}`} onClick={() => setFilter("hot")}>
-              Hot
-            </button>
+        {'Hot'}            </button>
             <input
               className="search-input"
               value={search}
