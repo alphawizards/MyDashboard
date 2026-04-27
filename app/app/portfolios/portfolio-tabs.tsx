@@ -35,7 +35,7 @@ export function PortfolioTabs({ portfolios }: PortfolioTabsProps) {
           <div className="portfolio-visual">
             <div className="portfolio-visual-gradient" />
             <div>
-              <p className="eyebrow">Autopilot</p>
+              <p className="eyebrow">Tracked account</p>
               <h2>{activePortfolio.title}</h2>
               <p>by {activePortfolio.ownerName}</p>
             </div>
@@ -43,8 +43,14 @@ export function PortfolioTabs({ portfolios }: PortfolioTabsProps) {
           <div className="portfolio-summary">
             {activePortfolio.returnAllTime === null ? (
               <div>
-                <strong className="portfolio-pending">Awaiting data</strong>
-                <span>Provide Wolff&apos;s screenshots or holdings to activate this tracker.</span>
+                <strong className="portfolio-pending">
+                  {activePortfolio.holdings.length ? "Holdings captured" : "Awaiting data"}
+                </strong>
+                <span>
+                  {activePortfolio.holdings.length
+                    ? activePortfolio.source
+                    : "Send the portfolio screenshots and I&apos;ll add holdings, weights, performance, and notes here."}
+                </span>
               </div>
             ) : (
               <div>
@@ -65,7 +71,7 @@ export function PortfolioTabs({ portfolios }: PortfolioTabsProps) {
           <div className="portfolio-section-header">
             <div>
               <p className="eyebrow">Current holdings</p>
-              <h2>{activePortfolio.status === "tracked" ? activePortfolio.title : "Waiting for Wolff portfolio"}</h2>
+              <h2>{activePortfolio.status === "tracked" ? activePortfolio.title : "Waiting for portfolio data"}</h2>
             </div>
           </div>
 

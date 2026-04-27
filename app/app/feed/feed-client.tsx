@@ -17,6 +17,7 @@ const authorNames: Record<AuthorKey, string> = {
   w: "Wolff",
   a: "Serenity",
   b: "BryzonX",
+  v: "Venu",
 };
 
 function decodeEntities(text: string) {
@@ -94,7 +95,7 @@ export function FeedClient({ authors, tweetsByAuthor }: FeedClientProps) {
               // eslint-disable-next-line @next/next/no-img-element
               <img className="avatar" src={author.avatar} alt="" />
             ) : (
-              <div className="avatar-fallback">BX</div>
+              <div className="avatar-fallback">{author.shortName.slice(0, 2).toUpperCase()}</div>
             )}
             <div className="author-info">
               <h2>{author.name}</h2>
@@ -299,20 +300,29 @@ function OverlapPanel({ overlap }: { overlap: TickerOverlap[] }) {
 }
 
 function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
-  const lanes = ["shared", "s", "w", "a", "b"] as const;
-  const labels = { shared: "Shared", s: "Sikand", w: "Wolff", a: "Serenity", b: "BryzonX" };
-  const width = 1000;
-  const height = 540;
+  const lanes = ["shared", "s", "w", "a", "b", "v"] as const;
+  const labels = { shared: "Shared", s: "Sikand", w: "Wolff", a: "Serenity", b: "BryzonX", v: "Venu" };
+  const width = 1320;
   const laneWidth = width / lanes.length;
   const maxCount = Math.max(...overlap.map((row) => row.total), 1);
+  const laneCounts = Object.fromEntries(
+    lanes.map((lane) => [
+      lane,
+      overlap.filter((row) => (row.shared ? "shared" : row.authors[0].who) === lane).length,
+    ]),
+  ) as Record<(typeof lanes)[number], number>;
+  const rowGap = 64;
+  const height = Math.max(560, 120 + Math.max(...Object.values(laneCounts)) * rowGap);
+
   const nodes = overlap.map((row, index) => {
     const lane = row.shared ? "shared" : row.authors[0].who;
     const laneIndex = lanes.indexOf(lane);
     const inLaneIndex = overlap.filter((item) => (item.shared ? "shared" : item.authors[0].who) === lane).indexOf(row);
-    const radius = Math.max(25, Math.sqrt(row.total / maxCount) * 54);
-    const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * Math.min(40, radius);
-    const y = 118 + Math.floor(inLaneIndex / 2) * 92 + (index % 3) * 7;
-    return { ...row, lane, radius, x, y: Math.min(y, height - radius - 20) };
+    const radius = Math.max(20, Math.sqrt(row.total / maxCount) * 34);
+    const offsets = [-26, 26, 0];
+    const x = laneIndex * laneWidth + laneWidth / 2 + offsets[inLaneIndex % offsets.length];
+    const y = 88 + inLaneIndex * rowGap + (index % 2) * 4;
+    return { ...row, lane, radius, x, y };
   });
 
   return (
@@ -320,7 +330,7 @@ function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
       <title>Ticker overlap bubble chart</title>
       {lanes.map((lane, index) => (
         <g key={lane}>
-          <rect className="bubble-lane-bg" x={index * laneWidth + 10} y={48} width={laneWidth - 20} height={470} rx={10} />
+          <rect className="bubble-lane-bg" x={index * laneWidth + 10} y={48} width={laneWidth - 20} height={height - 72} rx={10} />
           <text className="bubble-lane-label" textAnchor="middle" x={index * laneWidth + laneWidth / 2} y={28}>
             {labels[lane]} ({nodes.filter((node) => node.lane === lane).length})
           </text>

@@ -1,4 +1,4 @@
-export type AuthorKey = "s" | "w" | "a" | "b";
+export type AuthorKey = "s" | "w" | "a" | "b" | "v";
 
 export type AuthorProfile = {
   key: AuthorKey;
@@ -69,7 +69,7 @@ export type PortfolioHolding = {
 
 export type AutopilotPortfolio = {
   id: string;
-  ownerKey: "sikand" | "wolff";
+  ownerKey: "sikand" | "wolff" | "venu";
   ownerName: string;
   title: string;
   status: "tracked" | "pending";

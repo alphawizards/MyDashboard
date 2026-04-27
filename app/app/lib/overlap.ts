@@ -5,6 +5,7 @@ export const colorByAuthor: Record<AuthorKey, string> = {
   w: "#10b981",
   a: "#a78bfa",
   b: "#f43f5e",
+  v: "#f59e0b",
 };
 
 export function buildTickerCounts(tweets: readonly Tweet[]) {
