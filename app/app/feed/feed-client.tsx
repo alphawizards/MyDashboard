@@ -136,7 +136,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
           {refreshing ? '⟳ Refreshing...' : '↻ Refresh Feed'}
         <span className="refresh-timestamp" style={{ fontSize: '0.85rem', color: '#8b94a8' }}>
           Last updated: {lastRefreshTime}
-        </span>        </div>
+        </span>
         </button>
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
           All Feed <span className="count">{allTweets.length}</span>
