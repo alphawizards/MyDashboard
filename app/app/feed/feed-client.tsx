@@ -66,6 +66,30 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
     }
   }
   const [tickerFilter, setTickerFilter] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshTime, setLastRefreshTime] = useState<string | null>(null);
+
+  async function handleRefresh() {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      const res = await fetch("/api/refresh/all", { method: "POST" });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { ok?: boolean; lastRefreshTime?: string };
+      if (data.ok && data.lastRefreshTime) {
+        const formatted = new Date(data.lastRefreshTime).toLocaleString("en-AU", {
+          timeZone: "Australia/Brisbane",
+          dateStyle: "medium",
+          timeStyle: "short",
+        });
+        setLastRefreshTime(`${formatted} AEST`);
+      }
+    } catch (err) {
+      console.error("Refresh failed:", err);
+    } finally {
+      setRefreshing(false);
+    }
+  }
   const authorByKey = useMemo(
     () => Object.fromEntries(authors.map((author) => [author.key, author])) as Record<AuthorKey, AuthorProfile>,
     [authors],
@@ -125,6 +149,23 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
           </article>
         ))}
       </section>
+
+      <div
+        className="refresh-bar"
+        style={{ display: "flex", gap: "12px", alignItems: "center", margin: "8px 0" }}
+      >
+        <button
+          type="button"
+          className="filter-btn"
+          onClick={handleRefresh}
+          disabled={refreshing}
+        >
+          {refreshing ? "Refreshing..." : "Refresh Feed"}
+        </button>
+        <span style={{ color: "#8a99b3", fontSize: "0.85rem" }}>
+          Last updated: {lastRefreshTime ?? "Not available"}
+        </span>
+      </div>
 
       <nav className="tab-bar" aria-label="Feed tabs">
 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginRight: 'auto' }}>
