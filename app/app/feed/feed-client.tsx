@@ -127,16 +127,16 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
       </section>
 
       <nav className="tab-bar" aria-label="Feed tabs">
-        <button
+<div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginRight: 'auto' }}>
+                <button
           className="tab-btn refresh-btn"
           onClick={handleRefresh}
           disabled={refreshing}
-          style={{ marginRight: 'auto', opacity: refreshing ? 0.6 : 1 }}
-        >
+          style={{ opacity: refreshing ? 0.6 : 1 }}        >
           {refreshing ? '⟳ Refreshing...' : '↻ Refresh Feed'}
-        <span className="refresh-timestamp" style={{ fontSize: '0.85rem', color: '#8b94a8', marginLeft: '12px' }}>
-          Last updated: {lastRefreshTime}
+        <span className="refresh-timestamp" style={{ fontSize: '0.85rem', color: '#8b94a8' }}>          Last updated: {lastRefreshTime}
         </span>
+        </div>
         </button>
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
           All Feed <span className="count">{allTweets.length}</span>
