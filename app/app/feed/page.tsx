@@ -21,6 +21,11 @@ export default async function FeedPage() {
       if (totalLive > 0) {
         tweetsByAuthor = live;
         dataSource = "live";
+  let lastRefreshTime = new Date().toLocaleString('en-AU', {
+    timeZone: 'Australia/Brisbane',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }) + ' AEST';
       }
     } catch {
       // fetchAllTweets failed — keep static fallback silently
@@ -51,7 +56,7 @@ export default async function FeedPage() {
           </Link>
         </nav>
       </header>
-      <FeedClient authors={authors} tweetsByAuthor={tweetsByAuthor} />
+      <FeedClient authors={authors} tweetsByAuthor={tweetsByAuthor} lastRefreshTime={lastRefreshTime} />
     </main>
   );
 }
