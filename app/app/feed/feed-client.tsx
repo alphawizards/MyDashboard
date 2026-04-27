@@ -139,7 +139,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
         </span>
         </button>
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
-          All Feed <span className="count">{allTweets.length}</span>
+        {'All Feed '}<span className="count">{allTweets.length}</span>
         </button>
         {authors.map((author) => (
           <button
