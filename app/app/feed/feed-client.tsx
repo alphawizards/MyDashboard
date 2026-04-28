@@ -359,7 +359,7 @@ function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
     const laneIndex = lanes.indexOf(lane);
     const inLaneIndex = overlap.filter((item) => (item.shared ? "shared" : item.authors[0].who) === lane).indexOf(row);
     const radius = Math.max(25, Math.sqrt(row.total / maxCount) * 54);
-        const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * (radius + 4);
+            const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * 2 * (radius + 6);
         const y = 118 + Math.floor(inLaneIndex / 2) * (radius * 2 + 10);
     return { ...row, lane, radius, x, y: Math.min(y, height - radius - 20) };
   });
