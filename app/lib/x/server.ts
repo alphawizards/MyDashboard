@@ -1,6 +1,22 @@
 import 'server-only';
 import type { AuthorKey, Tweet } from '@/app/lib/types';
 
+type XEndpointDiagnostic = {
+  ok: boolean;
+  status: number | null;
+  error?: string;
+};
+
+export type XAuthorRefreshDiagnostic = {
+  handle: string;
+  userLookup: XEndpointDiagnostic;
+  tweets?: XEndpointDiagnostic & {
+    returned?: number;
+  };
+};
+
+export type XRefreshDiagnostics = Record<AuthorKey, XAuthorRefreshDiagnostic>;
+
 export function isXConfigured(): boolean {
   return Boolean(process.env.X_BEARER_TOKEN);
 }
@@ -22,6 +38,19 @@ function authHeaders() {
   return {
     Authorization: `Bearer ${process.env.X_BEARER_TOKEN}`,
   };
+}
+
+async function responseError(res: Response): Promise<string> {
+  try {
+    const body = await res.json();
+    return JSON.stringify(body);
+  } catch {
+    try {
+      return await res.text();
+    } catch {
+      return res.statusText || `HTTP ${res.status}`;
+    }
+  }
 }
 
 // Parses AEST-formatted date string from ISO 8601
@@ -46,22 +75,50 @@ function extractCashtags(text: string, entities?: { cashtags?: { tag: string }[]
   return [...new Set(matches.map((m) => m.slice(1)))];
 }
 
-async function resolveUserId(handle: string): Promise<string | null> {
-  const res = await fetch(`${X_API}/users/by/username/${handle}?user.fields=id`, {
-    headers: authHeaders(),
-    next: { revalidate: 86400 }, // cache user id for 24h
-  });
-  if (!res.ok) return null;
-  const json = await res.json();
-  return json?.data?.id ?? null;
+async function resolveUserIdWithDiagnostic(
+  handle: string
+): Promise<{ userId: string | null; diagnostic: XEndpointDiagnostic }> {
+  try {
+    const res = await fetch(`${X_API}/users/by/username/${handle}?user.fields=id`, {
+      headers: authHeaders(),
+      next: { revalidate: 86400 }, // cache user id for 24h
+    });
+
+    if (!res.ok) {
+      return {
+        userId: null,
+        diagnostic: { ok: false, status: res.status, error: await responseError(res) },
+      };
+    }
+
+    const json = await res.json();
+    const userId = json?.data?.id ?? null;
+    return {
+      userId,
+      diagnostic: userId
+        ? { ok: true, status: res.status }
+        : { ok: false, status: res.status, error: "X response did not include data.id" },
+    };
+  } catch (err) {
+    return {
+      userId: null,
+      diagnostic: {
+        ok: false,
+        status: null,
+        error: err instanceof Error ? err.message : "Unknown user lookup error",
+      },
+    };
+  }
 }
 
-export async function fetchTweetsForAuthor(
+export async function fetchTweetsForAuthorWithDiagnostic(
   key: AuthorKey,
   handle: string
-): Promise<Tweet[]> {
-  const userId = await resolveUserId(handle);
-  if (!userId) return [];
+): Promise<{ tweets: Tweet[]; diagnostic: XAuthorRefreshDiagnostic }> {
+  const { userId, diagnostic: userLookup } = await resolveUserIdWithDiagnostic(handle);
+  const diagnostic: XAuthorRefreshDiagnostic = { handle, userLookup };
+
+  if (!userId) return { tweets: [], diagnostic };
 
   const params = new URLSearchParams({
     max_results: String(MAX_RESULTS),
@@ -70,11 +127,25 @@ export async function fetchTweetsForAuthor(
     exclude: 'retweets,replies',
   });
 
-  const res = await fetch(
-    `${X_API}/users/${userId}/tweets?${params}`,
-    { headers: authHeaders(), cache: 'no-store' }
-  );
-  if (!res.ok) return [];
+  let res: Response;
+  try {
+    res = await fetch(
+      `${X_API}/users/${userId}/tweets?${params}`,
+      { headers: authHeaders(), cache: 'no-store' }
+    );
+  } catch (err) {
+    diagnostic.tweets = {
+      ok: false,
+      status: null,
+      error: err instanceof Error ? err.message : "Unknown tweets fetch error",
+    };
+    return { tweets: [], diagnostic };
+  }
+
+  if (!res.ok) {
+    diagnostic.tweets = { ok: false, status: res.status, error: await responseError(res) };
+    return { tweets: [], diagnostic };
+  }
 
   const json = await res.json();
   const rawTweets: {
@@ -85,7 +156,9 @@ export async function fetchTweetsForAuthor(
     entities?: { cashtags?: { tag: string }[] };
   }[] = json?.data ?? [];
 
-  return rawTweets.map((t) => ({
+  diagnostic.tweets = { ok: true, status: res.status, returned: rawTweets.length };
+
+  const tweets = rawTweets.map((t) => ({
     id: t.id,
     text: t.text,
     created_at: formatDate(t.created_at),
@@ -95,13 +168,39 @@ export async function fetchTweetsForAuthor(
     cashtags: extractCashtags(t.text, t.entities),
     url: `https://x.com/${handle}/status/${t.id}`,
   }));
+
+  return { tweets, diagnostic };
+}
+
+export async function fetchTweetsForAuthor(
+  key: AuthorKey,
+  handle: string
+): Promise<Tweet[]> {
+  const { tweets } = await fetchTweetsForAuthorWithDiagnostic(key, handle);
+  return tweets;
 }
 
 export async function fetchAllTweets(): Promise<Record<AuthorKey, Tweet[]>> {
+  const { tweetsByAuthor } = await fetchAllTweetsWithDiagnostics();
+  return tweetsByAuthor;
+}
+
+export async function fetchAllTweetsWithDiagnostics(): Promise<{
+  tweetsByAuthor: Record<AuthorKey, Tweet[]>;
+  diagnostics: XRefreshDiagnostics;
+}> {
   const entries = await Promise.all(
     (Object.entries(AUTHOR_HANDLES) as [AuthorKey, string][]).map(
-      async ([key, handle]) => [key, await fetchTweetsForAuthor(key, handle)] as const
+      async ([key, handle]) => [key, await fetchTweetsForAuthorWithDiagnostic(key, handle)] as const
     )
   );
-  return Object.fromEntries(entries) as Record<AuthorKey, Tweet[]>;
+
+  return {
+    tweetsByAuthor: Object.fromEntries(
+      entries.map(([key, result]) => [key, result.tweets])
+    ) as Record<AuthorKey, Tweet[]>,
+    diagnostics: Object.fromEntries(
+      entries.map(([key, result]) => [key, result.diagnostic])
+    ) as XRefreshDiagnostics,
+  };
 }

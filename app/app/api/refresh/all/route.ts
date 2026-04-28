@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
-import { fetchAllTweets, isXConfigured } from "@/lib/x/server";
+import { fetchAllTweetsWithDiagnostics, isXConfigured } from "@/lib/x/server";
+import type { XRefreshDiagnostics } from "@/lib/x/server";
 
 export async function POST(request: Request) {
   const configuredSecret = process.env.REFRESH_SHARED_SECRET;
@@ -16,10 +17,12 @@ export async function POST(request: Request) {
   let mode = "static";
   let message = "X_BEARER_TOKEN is not configured; static fallback data is active.";
   let fetched: Record<string, number> | undefined;
+  let diagnostics: XRefreshDiagnostics | undefined;
 
   if (isXConfigured()) {
     try {
-      const tweetsByAuthor = await fetchAllTweets();
+      const { tweetsByAuthor, diagnostics: xDiagnostics } = await fetchAllTweetsWithDiagnostics();
+      diagnostics = xDiagnostics;
       fetched = Object.fromEntries(
         Object.entries(tweetsByAuthor).map(([key, tweets]) => [key, tweets.length]),
       );
@@ -40,5 +43,6 @@ export async function POST(request: Request) {
     mode,
     message,
     ...(fetched ? { fetched } : {}),
+    ...(diagnostics ? { diagnostics } : {}),
   });
 }
