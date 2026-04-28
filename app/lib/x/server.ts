@@ -25,7 +25,7 @@ export function isXConfigured(): boolean {
 const AUTHOR_HANDLES: Record<AuthorKey, string> = {
   s: 'michaelsikand',
   w: 'peterjwolff',
-  a: 'aleabiloreddit',
+  a: 'aleabitoreddit',
   b: 'BryzonX',
 };
 
@@ -122,8 +122,7 @@ export async function fetchTweetsForAuthorWithDiagnostic(
 
   const params = new URLSearchParams({
     max_results: String(MAX_RESULTS),
-    tweet_fields: TWEET_FIELDS,
-    expansions: 'entities',
+    'tweet.fields': TWEET_FIELDS,
     exclude: 'retweets,replies',
   });
 
