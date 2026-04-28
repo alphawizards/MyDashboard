@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { buildTickerCounts, buildTickerOverlap, colorByAuthor } from "../lib/overlap";
 import type { AuthorKey, AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
-import { useRouter } from 'next/navigation';
+import { useRouter } from "next/navigation";
 
 type Tab = "all" | AuthorKey | "overlap";
 type Filter = "all" | "tickers" | "hot";
@@ -46,43 +46,35 @@ function safeOpen(url: string) {
   }
 }
 
-export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedClientProps) {
+function formatRefreshTime(timestamp: string) {
+  return `${new Date(timestamp).toLocaleString("en-AU", {
+    timeZone: "Australia/Brisbane",
+    dateStyle: "medium",
+    timeStyle: "short",
+  })} AEST`;
+}
+
+export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLastRefreshTime }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-
-  async function handleRefresh() {
-    setRefreshing(true);
-    try {
-      await fetch('/api/refresh/all', { method: 'POST' });
-      // Force Next.js to re-render this RSC with fresh data from the server
-      router.refresh();
-    } catch (err) {
-      console.error('Refresh failed:', err);
-    } finally {
-      setRefreshing(false);
-    }
-  }
+  const [lastRefreshTime, setLastRefreshTime] = useState(initialLastRefreshTime);
   const [tickerFilter, setTickerFilter] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lastRefreshTime, setLastRefreshTime] = useState<string | null>(null);
 
   async function handleRefresh() {
     if (refreshing) return;
+
     setRefreshing(true);
     try {
       const res = await fetch("/api/refresh/all", { method: "POST" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
       const data = (await res.json()) as { ok?: boolean; lastRefreshTime?: string };
       if (data.ok && data.lastRefreshTime) {
-        const formatted = new Date(data.lastRefreshTime).toLocaleString("en-AU", {
-          timeZone: "Australia/Brisbane",
-          dateStyle: "medium",
-          timeStyle: "short",
-        });
-        setLastRefreshTime(`${formatted} AEST`);
+        setLastRefreshTime(formatRefreshTime(data.lastRefreshTime));
+        router.refresh();
       }
     } catch (err) {
       console.error("Refresh failed:", err);
@@ -168,17 +160,6 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
       </div>
 
       <nav className="tab-bar" aria-label="Feed tabs">
-<div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginRight: 'auto' }}>
-                <button
-          className="tab-btn refresh-btn"
-          onClick={handleRefresh}
-          disabled={refreshing}
-          style={{ opacity: refreshing ? 0.6 : 1 }}        >
-          {refreshing ? '⟳ Refreshing...' : '↻ Refresh Feed'}
-        <span className="refresh-timestamp" style={{ fontSize: '0.85rem', color: '#8b94a8' }}>
-          Last updated: {lastRefreshTime}
-        </span>
-        </button>
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
         {'All Feed '}<span className="count">{allTweets.length}</span>
         </button>
@@ -194,7 +175,6 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime }: FeedCli
         <button className={`tab-btn ${tab === "overlap" ? "active" : ""}`} onClick={() => selectTab("overlap")}>
         {'Overlap '}<span className="count">{sharedOverlap.length}</span>
         </button>
-          </div>
       </nav>
 
       {tab === "overlap" ? (
