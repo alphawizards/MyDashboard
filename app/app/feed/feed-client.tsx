@@ -351,7 +351,7 @@ function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
   const lanes = ["shared", "s", "w", "a", "b"] as const;
   const labels = { shared: "Shared", s: "Sikand", w: "Wolff", a: "Serenity", b: "BryzonX" };
   const width = 1000;
-  const height = 540;
+    const height = 900;
   const laneWidth = width / lanes.length;
   const maxCount = Math.max(...overlap.map((row) => row.total), 1);
   const nodes = overlap.map((row, index) => {
@@ -359,8 +359,8 @@ function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
     const laneIndex = lanes.indexOf(lane);
     const inLaneIndex = overlap.filter((item) => (item.shared ? "shared" : item.authors[0].who) === lane).indexOf(row);
     const radius = Math.max(25, Math.sqrt(row.total / maxCount) * 54);
-    const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * Math.min(40, radius);
-    const y = 118 + Math.floor(inLaneIndex / 2) * 92 + (index % 3) * 7;
+        const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * (radius + 4);
+        const y = 118 + Math.floor(inLaneIndex / 2) * (radius * 2 + 10);
     return { ...row, lane, radius, x, y: Math.min(y, height - radius - 20) };
   });
 
@@ -369,7 +369,7 @@ function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
       <title>Ticker overlap bubble chart</title>
       {lanes.map((lane, index) => (
         <g key={lane}>
-          <rect className="bubble-lane-bg" x={index * laneWidth + 10} y={48} width={laneWidth - 20} height={470} rx={10} />
+                  <rect className="bubble-lane-bg" x={index * laneWidth + 10} y={48} width={laneWidth - 20} height={height - 70} rx={10} />
           <text className="bubble-lane-label" textAnchor="middle" x={index * laneWidth + laneWidth / 2} y={28}>
             {labels[lane]} ({nodes.filter((node) => node.lane === lane).length})
           </text>
