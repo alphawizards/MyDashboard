@@ -1,4 +1,5 @@
 import 'server-only';
+import { authors } from '@/app/lib/static-data';
 import type { Tweet } from '@/app/lib/types';
 
 type XEndpointDiagnostic = {
@@ -21,13 +22,9 @@ export function isXConfigured(): boolean {
   return Boolean(process.env.X_BEARER_TOKEN);
 }
 
-// Maps our AuthorKey to the real X/Twitter handle
-const AUTHOR_HANDLES: Record<string, string> = {
-  s: 'michaelsikand',
-  w: 'peterjwolff',
-  a: 'aleabitoreddit',
-  b: 'BryzonX',
-};
+const AUTHOR_HANDLES = Object.fromEntries(
+  authors.map((author) => [author.key, author.handle])
+) as Record<string, string>;
 
 const TWEET_FIELDS =
   'id,text,created_at,public_metrics,entities';

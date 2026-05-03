@@ -210,7 +210,6 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
                   author={authorByKey[tweet.who]}
                   key={`${tweet.who}-${tweet.id}`}
                   tweet={tweet}
-                  who={tweet.who}
                 />
               ))
             ) : (
@@ -255,11 +254,9 @@ function TickerBar({
 function TweetCard({
   author,
   tweet,
-  who,
 }: {
   author: AuthorProfile;
   tweet: Tweet;
-  who: string;
 }) {
   const hot = tweet.likes >= 100 || tweet.retweets >= 10;
   const hasTicker = tweet.cashtags.length > 0;
