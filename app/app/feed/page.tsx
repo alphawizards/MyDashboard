@@ -9,6 +9,14 @@ import { fetchAllTweets, isXConfigured } from "@/lib/x/server";
 // The Refresh button forces an immediate revalidation via /api/refresh/all.
 export const revalidate = 1800;
 
+function isLocalAccountCreationEnabled(): boolean {
+  return (
+    process.env.LOCAL_ACCOUNT_CREATION_ENABLED === "true" &&
+    process.env.NODE_ENV !== "production" &&
+    !process.env.REFRESH_SHARED_SECRET
+  );
+}
+
 export default async function FeedPage() {
   const authorProfiles = getTrackedAuthors();
 
@@ -61,7 +69,7 @@ export default async function FeedPage() {
         </nav>
       </header>
       <FeedClient authors={authorProfiles} tweetsByAuthor={tweetsByAuthor} lastRefreshTime={lastRefreshTime}
-        accountCreationEnabled={!process.env.REFRESH_SHARED_SECRET} />
+        accountCreationEnabled={isLocalAccountCreationEnabled()} />
     </main>
   );
 }

@@ -4,14 +4,28 @@ import { normalizeXHandle } from "@/app/lib/accounts";
 import { addAccount, findByHandle } from "@/lib/accounts/server";
 import { isXConfigured, verifyXUserExists } from "@/lib/x/server";
 
+function isLocalAccountCreationEnabled(): boolean {
+  return (
+    process.env.LOCAL_ACCOUNT_CREATION_ENABLED === "true" &&
+    process.env.NODE_ENV !== "production" &&
+    !process.env.REFRESH_SHARED_SECRET
+  );
+}
+
+function storageErrorResponse() {
+  return NextResponse.json(
+    { ok: false, error: "Tracked account storage is unavailable. Check data/tracked-accounts.json." },
+    { status: 500 },
+  );
+}
+
 export async function POST(request: Request) {
-  // When REFRESH_SHARED_SECRET is configured, admin auth is assumed to exist
-  // but no client-facing auth mechanism is implemented yet. Disable account
-  // creation via the browser until a proper admin session is available.
-  if (process.env.REFRESH_SHARED_SECRET) {
+  // Dynamic account storage is a local development convenience until durable
+  // admin-backed persistence exists.
+  if (!isLocalAccountCreationEnabled()) {
     return NextResponse.json(
-      { ok: false, error: "Account creation is not available when admin auth is configured." },
-      { status: 401 },
+      { ok: false, error: "Local account creation is disabled." },
+      { status: 403 },
     );
   }
 
@@ -49,7 +63,13 @@ export async function POST(request: Request) {
     );
   }
 
-  const existing = findByHandle(handle);
+  let existing;
+  try {
+    existing = findByHandle(handle);
+  } catch {
+    return storageErrorResponse();
+  }
+
   if (existing) {
     return NextResponse.json(
       { ok: false, error: `Account @${handle} already exists (key: ${existing.key}).` },
@@ -68,7 +88,12 @@ export async function POST(request: Request) {
     }
   }
 
-  const profile = addAccount({ handle, name });
+  let profile;
+  try {
+    profile = addAccount({ handle, name });
+  } catch {
+    return storageErrorResponse();
+  }
 
   revalidatePath("/feed");
 
@@ -76,6 +101,6 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const enabled = !process.env.REFRESH_SHARED_SECRET;
+  const enabled = isLocalAccountCreationEnabled();
   return NextResponse.json({ enabled });
 }

@@ -9,30 +9,52 @@ import type { AccountInput } from "@/app/lib/accounts";
 const DATA_DIR = path.join(process.cwd(), "data");
 const ACCOUNTS_FILE = path.join(DATA_DIR, "tracked-accounts.json");
 
+export class AccountStorageError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = "AccountStorageError";
+    this.cause = cause;
+  }
+}
+
 function ensureDataDir(): void {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+  } catch (err) {
+    throw new AccountStorageError("Unable to prepare tracked account storage.", err);
   }
 }
 
 function readDynamicAccounts(): AuthorProfile[] {
+  ensureDataDir();
+  if (!fs.existsSync(ACCOUNTS_FILE)) {
+    return [];
+  }
+
   try {
-    ensureDataDir();
-    if (!fs.existsSync(ACCOUNTS_FILE)) {
-      fs.writeFileSync(ACCOUNTS_FILE, "[]", "utf-8");
-      return [];
-    }
     const raw = fs.readFileSync(ACCOUNTS_FILE, "utf-8");
     const parsed = JSON.parse(raw) as AuthorProfile[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+    if (!Array.isArray(parsed)) {
+      throw new AccountStorageError("Tracked account storage must contain a JSON array.");
+    }
+    return parsed;
+  } catch (err) {
+    if (err instanceof AccountStorageError) {
+      throw err;
+    }
+    throw new AccountStorageError("Unable to read tracked account storage.", err);
   }
 }
 
 function writeDynamicAccounts(accounts: AuthorProfile[]): void {
   ensureDataDir();
-  fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2), "utf-8");
+  try {
+    fs.writeFileSync(ACCOUNTS_FILE, JSON.stringify(accounts, null, 2), "utf-8");
+  } catch (err) {
+    throw new AccountStorageError("Unable to write tracked account storage.", err);
+  }
 }
 
 export function getTrackedAuthors(): readonly AuthorProfile[] {

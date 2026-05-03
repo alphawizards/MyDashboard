@@ -11,16 +11,34 @@ vi.mock("@/lib/x/server", () => ({ isXConfigured, verifyXUserExists }));
 
 describe("POST /api/x-accounts", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
     delete process.env.REFRESH_SHARED_SECRET;
+    process.env.LOCAL_ACCOUNT_CREATION_ENABLED = "true";
     isXConfigured.mockReturnValue(false);
   });
 
   afterEach(() => {
     delete process.env.REFRESH_SHARED_SECRET;
+    delete process.env.LOCAL_ACCOUNT_CREATION_ENABLED;
   });
 
-  it("returns 401 when REFRESH_SHARED_SECRET is configured", async () => {
+  it("returns 403 when local account creation is not explicitly enabled", async () => {
+    delete process.env.LOCAL_ACCOUNT_CREATION_ENABLED;
+
+    const { POST } = await import("../../app/api/x-accounts/route");
+    const res = await POST(new Request("http://localhost/api/x-accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ handle: "newuser", name: "New User" }),
+    }));
+    const body = await res.json();
+
+    expect(res.status).toBe(403);
+    expect(body.error).toMatch(/disabled/i);
+    expect(addAccount).not.toHaveBeenCalled();
+  });
+
+  it("returns 403 when REFRESH_SHARED_SECRET is configured", async () => {
     process.env.REFRESH_SHARED_SECRET = "admin-secret";
 
     const { POST } = await import("../../app/api/x-accounts/route");
@@ -31,8 +49,8 @@ describe("POST /api/x-accounts", () => {
     }));
     const body = await res.json();
 
-    expect(res.status).toBe(401);
-    expect(body.error).toMatch(/not available/i);
+    expect(res.status).toBe(403);
+    expect(body.error).toMatch(/disabled/i);
     expect(addAccount).not.toHaveBeenCalled();
   });
 
@@ -135,14 +153,35 @@ describe("POST /api/x-accounts", () => {
     expect(body.ok).toBe(true);
     expect(addAccount).toHaveBeenCalled();
   });
+
+  it("returns 500 when tracked account storage is unavailable", async () => {
+    findByHandle.mockReturnValue(undefined);
+    addAccount.mockImplementation(() => {
+      throw new Error("storage failed");
+    });
+
+    const { POST } = await import("../../app/api/x-accounts/route");
+    const res = await POST(new Request("http://localhost/api/x-accounts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ handle: "newuser", name: "New User" }),
+    }));
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.error).toMatch(/storage/i);
+  });
 });
 
 describe("GET /api/x-accounts", () => {
   afterEach(() => {
     delete process.env.REFRESH_SHARED_SECRET;
+    delete process.env.LOCAL_ACCOUNT_CREATION_ENABLED;
   });
 
-  it("returns enabled=true when no secret is configured", async () => {
+  it("returns enabled=true when local creation is explicitly enabled without a secret", async () => {
+    process.env.LOCAL_ACCOUNT_CREATION_ENABLED = "true";
+
     const { GET } = await import("../../app/api/x-accounts/route");
     const res = await GET();
     const body = await res.json();
@@ -151,7 +190,16 @@ describe("GET /api/x-accounts", () => {
   });
 
   it("returns enabled=false when REFRESH_SHARED_SECRET is configured", async () => {
+    process.env.LOCAL_ACCOUNT_CREATION_ENABLED = "true";
     process.env.REFRESH_SHARED_SECRET = "set";
+    const { GET } = await import("../../app/api/x-accounts/route");
+    const res = await GET();
+    const body = await res.json();
+
+    expect(body.enabled).toBe(false);
+  });
+
+  it("returns enabled=false when local creation is not explicitly enabled", async () => {
     const { GET } = await import("../../app/api/x-accounts/route");
     const res = await GET();
     const body = await res.json();
