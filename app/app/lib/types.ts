@@ -10,6 +10,10 @@ export type AuthorProfile = {
   bio: string;
   followers: string;
   avatar: string | null;
+  platform?: "X" | string;
+  winRate?: number;
+  shadowScore?: number;
+  rankSource?: string;
 };
 
 export type Tweet = {
