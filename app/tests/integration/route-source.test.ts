@@ -25,7 +25,6 @@ describe("prototype route source", () => {
     const portfolioTabs = readAppFile("portfolios/portfolio-tabs.tsx");
 
     expect(feed).toContain("X tracker");
-    expect(feedClient).toContain("BryzonX");
     expect(feedClient).toContain("Ticker Mention Map");
     expect(watchlist).toContain("Morning Stock Watchlist");
     expect(portfolios).toContain("Portfolio Tracker");

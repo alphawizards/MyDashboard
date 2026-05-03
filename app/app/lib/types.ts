@@ -1,4 +1,4 @@
-export type AuthorKey = "s" | "w" | "a" | "b";
+export type AuthorKey = string;
 
 export type AuthorProfile = {
   key: AuthorKey;

@@ -1,5 +1,6 @@
 import 'server-only';
-import type { AuthorKey, Tweet } from '@/app/lib/types';
+import { authors } from '@/app/lib/static-data';
+import type { Tweet } from '@/app/lib/types';
 
 type XEndpointDiagnostic = {
   ok: boolean;
@@ -15,19 +16,15 @@ export type XAuthorRefreshDiagnostic = {
   };
 };
 
-export type XRefreshDiagnostics = Record<AuthorKey, XAuthorRefreshDiagnostic>;
+export type XRefreshDiagnostics = Record<string, XAuthorRefreshDiagnostic>;
 
 export function isXConfigured(): boolean {
   return Boolean(process.env.X_BEARER_TOKEN);
 }
 
-// Maps our AuthorKey to the real X/Twitter handle
-const AUTHOR_HANDLES: Record<AuthorKey, string> = {
-  s: 'michaelsikand',
-  w: 'peterjwolff',
-  a: 'aleabitoreddit',
-  b: 'BryzonX',
-};
+const AUTHOR_HANDLES = Object.fromEntries(
+  authors.map((author) => [author.key, author.handle])
+) as Record<string, string>;
 
 const TWEET_FIELDS =
   'id,text,created_at,public_metrics,entities';
@@ -112,7 +109,7 @@ async function resolveUserIdWithDiagnostic(
 }
 
 export async function fetchTweetsForAuthorWithDiagnostic(
-  key: AuthorKey,
+  key: string,
   handle: string
 ): Promise<{ tweets: Tweet[]; diagnostic: XAuthorRefreshDiagnostic }> {
   const { userId, diagnostic: userLookup } = await resolveUserIdWithDiagnostic(handle);
@@ -172,24 +169,24 @@ export async function fetchTweetsForAuthorWithDiagnostic(
 }
 
 export async function fetchTweetsForAuthor(
-  key: AuthorKey,
+  key: string,
   handle: string
 ): Promise<Tweet[]> {
   const { tweets } = await fetchTweetsForAuthorWithDiagnostic(key, handle);
   return tweets;
 }
 
-export async function fetchAllTweets(): Promise<Record<AuthorKey, Tweet[]>> {
+export async function fetchAllTweets(): Promise<Record<string, Tweet[]>> {
   const { tweetsByAuthor } = await fetchAllTweetsWithDiagnostics();
   return tweetsByAuthor;
 }
 
 export async function fetchAllTweetsWithDiagnostics(): Promise<{
-  tweetsByAuthor: Record<AuthorKey, Tweet[]>;
+  tweetsByAuthor: Record<string, Tweet[]>;
   diagnostics: XRefreshDiagnostics;
 }> {
   const entries = await Promise.all(
-    (Object.entries(AUTHOR_HANDLES) as [AuthorKey, string][]).map(
+    Object.entries(AUTHOR_HANDLES).map(
       async ([key, handle]) => [key, await fetchTweetsForAuthorWithDiagnostic(key, handle)] as const
     )
   );
@@ -197,7 +194,7 @@ export async function fetchAllTweetsWithDiagnostics(): Promise<{
   return {
     tweetsByAuthor: Object.fromEntries(
       entries.map(([key, result]) => [key, result.tweets])
-    ) as Record<AuthorKey, Tweet[]>,
+    ),
     diagnostics: Object.fromEntries(
       entries.map(([key, result]) => [key, result.diagnostic])
     ) as XRefreshDiagnostics,

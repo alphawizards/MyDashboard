@@ -7,7 +7,8 @@ export default function Home() {
     (sum, tweets) => sum + tweets.length,
     0,
   );
-  const overlapCount = buildTickerOverlap(tweetsByAuthor).filter((row) => row.shared).length;
+  const colorByKey = Object.fromEntries(authors.map((a) => [a.key, a.color]));
+  const overlapCount = buildTickerOverlap(tweetsByAuthor, colorByKey).filter((row) => row.shared).length;
 
   return (
     <main className="app-shell">

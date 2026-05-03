@@ -1,24 +1,17 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { buildTickerCounts, buildTickerOverlap, colorByAuthor } from "../lib/overlap";
-import type { AuthorKey, AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
+import { buildTickerCounts, buildTickerOverlap } from "../lib/overlap";
+import type { AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
 import { useRouter } from "next/navigation";
 
-type Tab = "all" | AuthorKey | "overlap";
+type Tab = "all" | "overlap" | string;
 type Filter = "all" | "tickers" | "hot";
 
 type FeedClientProps = {
   authors: readonly AuthorProfile[];
-  tweetsByAuthor: Record<AuthorKey, readonly Tweet[]>;
+  tweetsByAuthor: Record<string, readonly Tweet[]>;
   lastRefreshTime: string;
-};
-
-const authorNames: Record<AuthorKey, string> = {
-  s: "Sikand",
-  w: "Wolff",
-  a: "Serenity",
-  b: "BryzonX",
 };
 
 function decodeEntities(text: string) {
@@ -83,17 +76,25 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
     }
   }
   const authorByKey = useMemo(
-    () => Object.fromEntries(authors.map((author) => [author.key, author])) as Record<AuthorKey, AuthorProfile>,
+    () => Object.fromEntries(authors.map((author) => [author.key, author])) as Record<string, AuthorProfile>,
+    [authors],
+  );
+  const colorByKey = useMemo(
+    () => Object.fromEntries(authors.map((a) => [a.key, a.color])) as Record<string, string>,
+    [authors],
+  );
+  const authorNames = useMemo(
+    () => Object.fromEntries(authors.map((a) => [a.key, a.shortName])) as Record<string, string>,
     [authors],
   );
   const allTweets = useMemo(
     () =>
-      (Object.entries(tweetsByAuthor) as [AuthorKey, readonly Tweet[]][])
+      (Object.entries(tweetsByAuthor) as [string, readonly Tweet[]][])
         .flatMap(([who, tweets]) => tweets.map((tweet) => ({ ...tweet, who })))
         .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1)),
     [tweetsByAuthor],
   );
-  const overlap = useMemo(() => buildTickerOverlap(tweetsByAuthor), [tweetsByAuthor]);
+  const overlap = useMemo(() => buildTickerOverlap(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
   const sharedOverlap = overlap.filter((row) => row.shared);
   const activeAuthor = tab !== "all" && tab !== "overlap" ? tab : null;
   const sourceTweets = activeAuthor
@@ -178,7 +179,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
       </nav>
 
       {tab === "overlap" ? (
-        <OverlapPanel overlap={overlap} />
+        <OverlapPanel overlap={overlap} colorByKey={colorByKey} authorNames={authorNames} />
       ) : (
         <>
           <div className="filter-bar">
@@ -209,7 +210,6 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
                   author={authorByKey[tweet.who]}
                   key={`${tweet.who}-${tweet.id}`}
                   tweet={tweet}
-                  who={tweet.who}
                 />
               ))
             ) : (
@@ -254,11 +254,9 @@ function TickerBar({
 function TweetCard({
   author,
   tweet,
-  who,
 }: {
   author: AuthorProfile;
   tweet: Tweet;
-  who: AuthorKey;
 }) {
   const hot = tweet.likes >= 100 || tweet.retweets >= 10;
   const hasTicker = tweet.cashtags.length > 0;
@@ -292,7 +290,7 @@ function TweetCard({
             <span
               className="cashtag-tag"
               key={`${tweet.id}-${tag}-${index}`}
-              style={{ borderColor: colorByAuthor[who], color: colorByAuthor[who], background: "#101624" }}
+              style={{ borderColor: author.color, color: author.color, background: "#101624" }}
             >
               {tag}
             </span>
@@ -314,7 +312,7 @@ function TweetCard({
   );
 }
 
-function OverlapPanel({ overlap }: { overlap: TickerOverlap[] }) {
+function OverlapPanel({ overlap, colorByKey, authorNames }: { overlap: TickerOverlap[]; colorByKey: Record<string, string>; authorNames: Record<string, string> }) {
   const shared = overlap.filter((row) => row.shared);
 
   return (
@@ -324,7 +322,7 @@ function OverlapPanel({ overlap }: { overlap: TickerOverlap[] }) {
         <p className="subtitle">
           Grouped by account. Gold lane = mentioned by multiple accounts; bubble size = total mentions.
         </p>
-        <OverlapSvg overlap={overlap} />
+        <OverlapSvg overlap={overlap} authorNames={authorNames} />
       </div>
       <aside className="overlap-card">
         <h2>Shared Tickers</h2>
@@ -334,8 +332,8 @@ function OverlapPanel({ overlap }: { overlap: TickerOverlap[] }) {
               <div className="shared-ticker">{row.ticker}</div>
               <div className="shared-meta">
                 {row.authors.map((author) => (
-                  <span key={`${row.ticker}-${author.who}`} style={{ color: colorByAuthor[author.who] }}>
-                    {authorNames[author.who]}: {author.count}x
+                  <span key={`${row.ticker}-${author.who}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
+                    {authorNames[author.who] ?? author.who}: {author.count}x
                   </span>
                 ))}
               </div>
@@ -347,11 +345,11 @@ function OverlapPanel({ overlap }: { overlap: TickerOverlap[] }) {
   );
 }
 
-function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
-  const lanes = ["shared", "s", "w", "a", "b"] as const;
-  const labels = { shared: "Shared", s: "Sikand", w: "Wolff", a: "Serenity", b: "BryzonX" };
+function OverlapSvg({ overlap, authorNames }: { overlap: TickerOverlap[]; authorNames: Record<string, string> }) {
+  const lanes = ["shared", ...Object.keys(authorNames)];
+  const labels: Record<string, string> = { shared: "Shared", ...authorNames };
   const width = 1000;
-    const height = 900;
+  const height = 540;
   const laneWidth = width / lanes.length;
   const maxCount = Math.max(...overlap.map((row) => row.total), 1);
   const nodes = overlap.map((row, index) => {
@@ -359,8 +357,8 @@ function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
     const laneIndex = lanes.indexOf(lane);
     const inLaneIndex = overlap.filter((item) => (item.shared ? "shared" : item.authors[0].who) === lane).indexOf(row);
     const radius = Math.max(25, Math.sqrt(row.total / maxCount) * 54);
-            const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * 2 * (radius + 6);
-        const y = 118 + Math.floor(inLaneIndex / 2) * (radius * 2 + 10);
+    const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * Math.min(40, radius);
+    const y = 118 + Math.floor(inLaneIndex / 2) * 92 + (index % 3) * 7;
     return { ...row, lane, radius, x, y: Math.min(y, height - radius - 20) };
   });
 
@@ -369,7 +367,7 @@ function OverlapSvg({ overlap }: { overlap: TickerOverlap[] }) {
       <title>Ticker overlap bubble chart</title>
       {lanes.map((lane, index) => (
         <g key={lane}>
-                  <rect className="bubble-lane-bg" x={index * laneWidth + 10} y={48} width={laneWidth - 20} height={height - 70} rx={10} />
+          <rect className="bubble-lane-bg" x={index * laneWidth + 10} y={48} width={laneWidth - 20} height={470} rx={10} />
           <text className="bubble-lane-label" textAnchor="middle" x={index * laneWidth + laneWidth / 2} y={28}>
             {labels[lane]} ({nodes.filter((node) => node.lane === lane).length})
           </text>

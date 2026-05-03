@@ -20,6 +20,7 @@ describe("X server client", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.doUnmock("@/app/lib/static-data");
     process.env.X_BEARER_TOKEN = originalBearer;
   });
 
@@ -107,5 +108,47 @@ describe("X server client", () => {
       b: 1,
     });
     expect(diagnostics.a.handle).toBe("aleabitoreddit");
+  });
+
+  it("derives live refresh handles from the configured authors", async () => {
+    vi.doMock("@/app/lib/static-data", () => ({
+      authors: [
+        { key: "s", handle: "michaelsikand" },
+        { key: "n", handle: "newauthor" },
+      ],
+    }));
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/users/by/username/")) {
+        const handle = url.match(/\/username\/([^?]+)/)?.[1] ?? "unknown";
+        return jsonResponse({ data: { id: `id-${handle}` } });
+      }
+
+      const userId = url.match(/\/users\/([^/]+)\/tweets/)?.[1] ?? "unknown";
+      return jsonResponse({
+        data: [
+          {
+            id: `${userId}-tweet`,
+            text: "Fresh post with $AMD",
+            created_at: "2026-04-28T03:00:00.000Z",
+            public_metrics: { like_count: 1, retweet_count: 2, reply_count: 3 },
+          },
+        ],
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { fetchAllTweetsWithDiagnostics } = await import("../../lib/x/server");
+    const { tweetsByAuthor, diagnostics } = await fetchAllTweetsWithDiagnostics();
+    const requestedHandles = fetchMock.mock.calls
+      .map(([input]) => String(input))
+      .filter((url) => url.includes("/users/by/username/"))
+      .map((url) => decodeURIComponent(url.match(/\/username\/([^?]+)/)?.[1] ?? ""));
+
+    expect(requestedHandles).toEqual(["michaelsikand", "newauthor"]);
+    expect(Object.keys(tweetsByAuthor)).toEqual(["s", "n"]);
+    expect(diagnostics.n.handle).toBe("newauthor");
   });
 });

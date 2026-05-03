@@ -1,11 +1,4 @@
-import type { AuthorKey, TickerOverlap, Tweet } from "./types";
-
-export const colorByAuthor: Record<AuthorKey, string> = {
-  s: "#4fc3f7",
-  w: "#10b981",
-  a: "#a78bfa",
-  b: "#f43f5e",
-};
+import type { TickerOverlap, Tweet } from "./types";
 
 export function buildTickerCounts(tweets: readonly Tweet[]) {
   const counts: Record<string, number> = {};
@@ -18,14 +11,15 @@ export function buildTickerCounts(tweets: readonly Tweet[]) {
 }
 
 export function buildTickerOverlap(
-  tweetsByAuthor: Record<AuthorKey, readonly Tweet[]>,
+  tweetsByAuthor: Record<string, readonly Tweet[]>,
+  colorByKey: Record<string, string>,
 ): TickerOverlap[] {
-  const countsByWho = Object.fromEntries(
+  const countsByWho: Record<string, Record<string, number>> = Object.fromEntries(
     Object.entries(tweetsByAuthor).map(([who, tweets]) => [
       who,
       buildTickerCounts(tweets),
     ]),
-  ) as Record<AuthorKey, Record<string, number>>;
+  );
 
   const allTickers = new Set(
     Object.values(countsByWho).flatMap((counts) => Object.keys(counts)),
@@ -33,12 +27,12 @@ export function buildTickerOverlap(
 
   return [...allTickers]
     .map((ticker) => {
-      const authors = (Object.entries(countsByWho) as [AuthorKey, Record<string, number>][])
+      const authors = Object.entries(countsByWho)
         .filter(([, counts]) => counts[ticker])
         .map(([who, counts]) => ({ who, count: counts[ticker] }));
       const total = authors.reduce((sum, author) => sum + author.count, 0);
       const shared = authors.length > 1;
-      const color = shared ? "#f59e0b" : colorByAuthor[authors[0].who];
+      const color = shared ? "#f59e0b" : colorByKey[authors[0].who] ?? "#94a3b8";
 
       return { ticker, authors, total, shared, color };
     })
