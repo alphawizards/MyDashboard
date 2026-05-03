@@ -12,6 +12,19 @@ function jsonResponse(body: unknown, init?: ResponseInit) {
   });
 }
 
+function makeStaticAuthors() {
+  return [
+    { key: "s", slug: "sikand", name: "Michael Sikand", shortName: "Sikand", handle: "michaelsikand", color: "#4fc3f7", bio: "", followers: "63K", avatar: null },
+    { key: "w", slug: "wolff", name: "Peter Wolff", shortName: "Wolff", handle: "peterjwolff", color: "#10b981", bio: "", followers: "15K", avatar: null },
+    { key: "a", slug: "serenity", name: "Serenity", shortName: "Serenity", handle: "aleabitoreddit", color: "#a78bfa", bio: "", followers: "224K", avatar: null },
+    { key: "b", slug: "bryzonx", name: "BryzonX", shortName: "BryzonX", handle: "BryzonX", color: "#f43f5e", bio: "", followers: "N/A", avatar: null },
+  ];
+}
+
+vi.mock("@/lib/accounts/server", () => ({
+  getTrackedAuthors: vi.fn(),
+}));
+
 describe("X server client", () => {
   beforeEach(() => {
     vi.resetModules();
@@ -20,8 +33,42 @@ describe("X server client", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.doUnmock("@/app/lib/static-data");
     process.env.X_BEARER_TOKEN = originalBearer;
+  });
+
+  it("verifyXUserExists returns true for a valid X handle", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/users/by/username/")) {
+        return jsonResponse({ data: { id: "user-123" } });
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { verifyXUserExists } = await import("../../lib/x/server");
+    const { exists, diagnostic } = await verifyXUserExists("realuser");
+
+    expect(exists).toBe(true);
+    expect(diagnostic.ok).toBe(true);
+  });
+
+  it("verifyXUserExists returns false for a nonexistent X handle", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/users/by/username/")) {
+        return jsonResponse({ errors: [{ message: "Not Found" }] }, { status: 404 });
+      }
+      return jsonResponse({});
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { verifyXUserExists } = await import("../../lib/x/server");
+    const { exists, diagnostic } = await verifyXUserExists("ghostuser");
+
+    expect(exists).toBe(false);
+    expect(diagnostic.ok).toBe(false);
+    expect(diagnostic.status).toBe(404);
   });
 
   it("requests latest tweets with valid X API v2 timeline parameters", async () => {
@@ -71,6 +118,9 @@ describe("X server client", () => {
   });
 
   it("refreshes the current four tracked handles including Serenity's correct handle", async () => {
+    const { getTrackedAuthors } = await import("@/lib/accounts/server");
+    vi.mocked(getTrackedAuthors).mockReturnValue(makeStaticAuthors());
+
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -111,12 +161,11 @@ describe("X server client", () => {
   });
 
   it("derives live refresh handles from the configured authors", async () => {
-    vi.doMock("@/app/lib/static-data", () => ({
-      authors: [
-        { key: "s", handle: "michaelsikand" },
-        { key: "n", handle: "newauthor" },
-      ],
-    }));
+    const { getTrackedAuthors } = await import("@/lib/accounts/server");
+    vi.mocked(getTrackedAuthors).mockReturnValue([
+      { key: "s", slug: "sikand", name: "Michael Sikand", shortName: "Sikand", handle: "michaelsikand", color: "#4fc3f7", bio: "", followers: "63K", avatar: null },
+      { key: "n", slug: "newauthor", name: "New Author", shortName: "NA", handle: "newauthor", color: "#06b6d4", bio: "", followers: "N/A", avatar: null },
+    ]);
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

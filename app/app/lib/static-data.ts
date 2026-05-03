@@ -26,7 +26,8 @@ export const authors = [
     "color": "#4fc3f7",
     "bio": "Investor ? $17M AUM @joinautopilot ? Forbes 30u30 ? Defense & Space focus",
     "followers": "63,446",
-    "avatar": "https://pbs.twimg.com/profile_images/1536185134684119040/X0UukfQa_normal.jpg"
+    "avatar": "https://pbs.twimg.com/profile_images/1536185134684119040/X0UukfQa_normal.jpg",
+    "platform": "X"
   },
   {
     "key": "w",
@@ -37,7 +38,8 @@ export const authors = [
     "color": "#10b981",
     "bio": "Dermatology NP ? $140M AUM @joinautopilot ? Tech / Macro / Precious metals",
     "followers": "15,334",
-    "avatar": "https://pbs.twimg.com/profile_images/1588706338443431936/ZKGkvq8P_normal.jpg"
+    "avatar": "https://pbs.twimg.com/profile_images/1588706338443431936/ZKGkvq8P_normal.jpg",
+    "platform": "X"
   },
   {
     "key": "a",
@@ -48,7 +50,11 @@ export const authors = [
     "color": "#a78bfa",
     "bio": "Ex-Reddit WSB trader ? AI / Semi supply-chain analyst ? ex RISC-V FDN / AI research",
     "followers": "224,473",
-    "avatar": "https://pbs.twimg.com/profile_images/1996176688414367744/LXfA_lIx_normal.jpg"
+    "avatar": "https://pbs.twimg.com/profile_images/1996176688414367744/LXfA_lIx_normal.jpg",
+    "platform": "X",
+    "winRate": 82,
+    "shadowScore": 66,
+    "rankSource": "Analyst leaderboard screenshot"
   },
   {
     "key": "b",
@@ -59,7 +65,158 @@ export const authors = [
     "color": "#f43f5e",
     "bio": "Trader / Analyst",
     "followers": "N/A",
-    "avatar": null
+    "avatar": null,
+    "platform": "X"
+  },
+  {
+    "key": "fransbakker9812",
+    "slug": "fransbakker9812",
+    "name": "FransBakker9812",
+    "shortName": "Frans",
+    "handle": "FransBakker9812",
+    "color": "#f59e0b",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 84,
+    "shadowScore": 73,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "kawzinvests",
+    "slug": "kawzinvests",
+    "name": "KawzInvests",
+    "shortName": "Kawz",
+    "handle": "KawzInvests",
+    "color": "#06b6d4",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 89,
+    "shadowScore": 72,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "stocktalkweekly",
+    "slug": "stocktalkweekly",
+    "name": "stocktalkweekly",
+    "shortName": "StockTalk",
+    "handle": "stocktalkweekly",
+    "color": "#ec4899",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 80,
+    "shadowScore": 71,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "theshortbear",
+    "slug": "theshortbear",
+    "name": "TheShortBear",
+    "shortName": "ShortBear",
+    "handle": "TheShortBear",
+    "color": "#84cc16",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 83,
+    "shadowScore": 70,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "jasonlcapital",
+    "slug": "jasonlcapital",
+    "name": "JasonL Capital",
+    "shortName": "JasonL",
+    "handle": "JasonLCapital",
+    "color": "#8b5cf6",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 80,
+    "shadowScore": 67,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "sandeman52",
+    "slug": "sandeman52",
+    "name": "Sandeman52",
+    "shortName": "Sandeman",
+    "handle": "Sandeman52",
+    "color": "#14b8a6",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 79,
+    "shadowScore": 67,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "stonkchris",
+    "slug": "stonkchris",
+    "name": "StonkChris",
+    "shortName": "StonkChris",
+    "handle": "StonkChris",
+    "color": "#f97316",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 77,
+    "shadowScore": 66,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "shortseller",
+    "slug": "shortseller",
+    "name": "ShortSeller",
+    "shortName": "ShortSeller",
+    "handle": "ShortSeller",
+    "color": "#e11d48",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 76,
+    "shadowScore": 65,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "futuristlens",
+    "slug": "futuristlens",
+    "name": "futurist_lens",
+    "shortName": "Futurist",
+    "handle": "futuristlens",
+    "color": "#0ea5e9",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 77,
+    "shadowScore": 65,
+    "rankSource": "Analyst leaderboard screenshot"
+  },
+  {
+    "key": "cyberprincerwo",
+    "slug": "cyberprincerwo",
+    "name": "cyberprince_rwo",
+    "shortName": "Cyber",
+    "handle": "cyberprincerwo",
+    "color": "#22c55e",
+    "bio": "Ranked X analyst from the shadow-score leaderboard.",
+    "followers": "N/A",
+    "avatar": null,
+    "platform": "X",
+    "winRate": 74,
+    "shadowScore": 65,
+    "rankSource": "Analyst leaderboard screenshot"
   }
 ] as const satisfies readonly AuthorProfile[];
 

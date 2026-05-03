@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { authors, tweetsByAuthor as staticTweetsByAuthor } from "../lib/static-data";
+import { tweetsByAuthor as staticTweetsByAuthor } from "../lib/static-data";
+import { buildAccountCompleteTweetMap } from "../lib/accounts";
+import { getTrackedAuthors } from "@/lib/accounts/server";
 import { FeedClient } from "./feed-client";
 import { fetchAllTweets, isXConfigured } from "@/lib/x/server";
 
@@ -8,9 +10,11 @@ import { fetchAllTweets, isXConfigured } from "@/lib/x/server";
 export const revalidate = 1800;
 
 export default async function FeedPage() {
+  const authorProfiles = getTrackedAuthors();
+
   // Use live X API data when the bearer token is present; otherwise
   // fall back gracefully to the static snapshot so the page always renders.
-  let tweetsByAuthor = staticTweetsByAuthor as Record<string, readonly { id: string; text: string; created_at: string; likes: number; retweets: number; replies: number; cashtags: string[]; url: string; }[]>;
+  let tweetsByAuthor = buildAccountCompleteTweetMap(authorProfiles, staticTweetsByAuthor);
   let dataSource: "live" | "static" = "static";
     let lastRefreshTime = 'Not available';
 
@@ -20,7 +24,7 @@ export default async function FeedPage() {
       // Only swap to live data if we actually got tweets back
       const totalLive = Object.values(live).reduce((s, arr) => s + arr.length, 0);
       if (totalLive > 0) {
-        tweetsByAuthor = live;
+        tweetsByAuthor = buildAccountCompleteTweetMap(authorProfiles, live);
         dataSource = "live";
     lastRefreshTime = new Date().toLocaleString('en-AU', {    timeZone: 'Australia/Brisbane',
     dateStyle: 'medium',
@@ -40,8 +44,8 @@ export default async function FeedPage() {
           <h1>Sikand Feed</h1>
           <p className="subtitle">
             {dataSource === "live"
-              ? `Live feed — ${authors.length} tracked accounts`
-              : `Static prototype port of the local feed with ${authors.length} tracked accounts.`}
+              ? `Live feed — ${authorProfiles.length} tracked accounts`
+              : `Static prototype port of the local feed with ${authorProfiles.length} tracked accounts.`}
           </p>
         </div>
         <nav className="nav-actions" aria-label="Dashboard navigation">
@@ -56,7 +60,8 @@ export default async function FeedPage() {
           </Link>
         </nav>
       </header>
-      <FeedClient authors={authors} tweetsByAuthor={tweetsByAuthor} lastRefreshTime={lastRefreshTime} />
+      <FeedClient authors={authorProfiles} tweetsByAuthor={tweetsByAuthor} lastRefreshTime={lastRefreshTime}
+        accountCreationEnabled={!process.env.REFRESH_SHARED_SECRET} />
     </main>
   );
 }
