@@ -3,6 +3,9 @@
 import { useMemo, useState } from "react";
 import { buildTickerCounts, buildTickerOverlap } from "../lib/overlap";
 import type { AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
+import { initialsFromName } from "../lib/accounts";
+import { AddAccountForm } from "./add-account-form";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 type Tab = "all" | "overlap" | string;
@@ -12,6 +15,7 @@ type FeedClientProps = {
   authors: readonly AuthorProfile[];
   tweetsByAuthor: Record<string, readonly Tweet[]>;
   lastRefreshTime: string;
+  accountCreationEnabled?: boolean;
 };
 
 function decodeEntities(text: string) {
@@ -47,7 +51,7 @@ function formatRefreshTime(timestamp: string) {
   })} AEST`;
 }
 
-export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLastRefreshTime }: FeedClientProps) {
+export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLastRefreshTime, accountCreationEnabled = false }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -97,9 +101,8 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
   const overlap = useMemo(() => buildTickerOverlap(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
   const sharedOverlap = overlap.filter((row) => row.shared);
   const activeAuthor = tab !== "all" && tab !== "overlap" ? tab : null;
-  const sourceTweets = activeAuthor
-    ? tweetsByAuthor[activeAuthor].map((tweet) => ({ ...tweet, who: activeAuthor }))
-    : allTweets;
+  const activeTweets = activeAuthor ? tweetsByAuthor[activeAuthor] ?? [] : allTweets;
+  const sourceTweets = activeAuthor ? activeTweets.map((tweet) => ({ ...tweet, who: activeAuthor })) : allTweets;
   const visibleTweets = sourceTweets.filter((tweet) => {
     const q = search.trim().toLowerCase();
     if (filter === "tickers" && tweet.cashtags.length === 0) return false;
@@ -110,7 +113,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
     }
     return true;
   });
-  const activeTickerCounts = buildTickerCounts(activeAuthor ? tweetsByAuthor[activeAuthor] : allTweets);
+  const activeTickerCounts = buildTickerCounts(activeTweets);
 
   function selectTab(next: Tab) {
     setTab(next);
@@ -123,12 +126,12 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
     <>
       <section className="authors-bar" aria-label="Tracked X accounts">
         {authors.map((author) => (
-          <article className="author-card" key={author.key} style={{ borderLeftColor: author.color }}>
+          <Link className="author-card" href={`/feed/accounts/${author.slug}`} key={author.key} style={{ borderLeftColor: author.color }}>
             {author.avatar ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img className="avatar" src={author.avatar} alt="" />
             ) : (
-              <div className="avatar-fallback">BX</div>
+              <div className="avatar-fallback">{initialsFromName(author.name)}</div>
             )}
             <div className="author-info">
               <h2>{author.name}</h2>
@@ -136,10 +139,10 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
               <div className="bio">{author.bio}</div>
             </div>
             <div className="author-stats">
-              <strong>{author.followers}</strong>
-              <span>followers</span>
+              <strong>{author.shadowScore ?? author.followers}</strong>
+              <span>{author.shadowScore === undefined ? "followers" : "shadow"}</span>
             </div>
-          </article>
+          </Link>
         ))}
       </section>
 
@@ -160,6 +163,10 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
         </span>
       </div>
 
+      {accountCreationEnabled && <AddAccountForm />}
+
+      <AnalystTable authors={authors} tweetsByAuthor={tweetsByAuthor} />
+
       <nav className="tab-bar" aria-label="Feed tabs">
         <button className={`tab-btn ${tab === "all" ? "active" : ""}`} onClick={() => selectTab("all")}>
         {'All Feed '}<span className="count">{allTweets.length}</span>
@@ -170,7 +177,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
             key={author.key}
             onClick={() => selectTab(author.key)}
           >
-            {author.shortName} <span className="count">{tweetsByAuthor[author.key].length}</span>
+            {author.shortName} <span className="count">{tweetsByAuthor[author.key]?.length ?? 0}</span>
           </button>
         ))}
         <button className={`tab-btn ${tab === "overlap" ? "active" : ""}`} onClick={() => selectTab("overlap")}>
@@ -179,7 +186,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
       </nav>
 
       {tab === "overlap" ? (
-        <OverlapPanel overlap={overlap} colorByKey={colorByKey} authorNames={authorNames} />
+        <OverlapPanel overlap={overlap} colorByKey={colorByKey} authorByKey={authorByKey} authorNames={authorNames} />
       ) : (
         <>
           <div className="filter-bar">
@@ -219,6 +226,53 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
         </>
       )}
     </>
+  );
+}
+
+function AnalystTable({
+  authors,
+  tweetsByAuthor,
+}: {
+  authors: readonly AuthorProfile[];
+  tweetsByAuthor: Record<string, readonly Tweet[]>;
+}) {
+  const rankedAuthors = [...authors].sort(
+    (a, b) =>
+      (b.shadowScore ?? -1) - (a.shadowScore ?? -1) ||
+      (b.winRate ?? -1) - (a.winRate ?? -1) ||
+      a.name.localeCompare(b.name),
+  );
+
+  return (
+    <section className="analyst-panel" aria-label="Ranked X analysts">
+      <div className="analyst-header">
+        <span>Analyst</span>
+        <span>Platform</span>
+        <span>Win Rate</span>
+        <span>Shadow Score</span>
+        <span>Tweets</span>
+      </div>
+      {rankedAuthors.map((author) => (
+        <Link className="analyst-row" href={`/feed/accounts/${author.slug}`} key={author.key}>
+          <span className="analyst-name-cell">
+            {author.avatar ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img className="analyst-avatar" src={author.avatar} alt="" />
+            ) : (
+              <span className="analyst-avatar analyst-avatar-fallback">{initialsFromName(author.name)}</span>
+            )}
+            <span>
+              <strong>{author.name}</strong>
+              <small>@{author.handle}</small>
+            </span>
+          </span>
+          <span>{author.platform ?? "X"}</span>
+          <span>{author.winRate === undefined ? "-" : `${author.winRate}%`}</span>
+          <span className="shadow-score">{author.shadowScore ?? "-"}</span>
+          <span>{tweetsByAuthor[author.key]?.length ?? 0}</span>
+        </Link>
+      ))}
+    </section>
   );
 }
 
@@ -312,17 +366,56 @@ function TweetCard({
   );
 }
 
-function OverlapPanel({ overlap, colorByKey, authorNames }: { overlap: TickerOverlap[]; colorByKey: Record<string, string>; authorNames: Record<string, string> }) {
+function OverlapPanel({
+  overlap,
+  colorByKey,
+  authorByKey,
+  authorNames,
+}: {
+  overlap: TickerOverlap[];
+  colorByKey: Record<string, string>;
+  authorByKey: Record<string, AuthorProfile>;
+  authorNames: Record<string, string>;
+}) {
   const shared = overlap.filter((row) => row.shared);
+  const tableRows = overlap.slice(0, 24);
 
   return (
     <section className="overlap-layout">
       <div className="overlap-card">
         <h2>Ticker Mention Map</h2>
         <p className="subtitle">
-          Grouped by account. Gold lane = mentioned by multiple accounts; bubble size = total mentions.
+          Top shared tickers stay in the chart; the table keeps the full account set readable.
         </p>
         <OverlapSvg overlap={overlap} authorNames={authorNames} />
+        <div className="overlap-table" role="table" aria-label="Ticker overlap details">
+          <div className="overlap-table-row overlap-table-head" role="row">
+            <span>Ticker</span>
+            <span>Total</span>
+            <span>Accounts</span>
+          </div>
+          {tableRows.map((row) => (
+            <div className="overlap-table-row" role="row" key={row.ticker}>
+              <span className="shared-ticker">{row.ticker}</span>
+              <span>{row.total}</span>
+              <span className="shared-meta">
+                {row.authors.map((author) => {
+                  const profile = authorByKey[author.who];
+                  const label = authorNames[author.who] ?? author.who;
+                  return profile ? (
+                    <Link key={`${row.ticker}-${author.who}`} href={`/feed/accounts/${profile.slug}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
+                      {label}: {author.count}x
+                    </Link>
+                  ) : (
+                    <span key={`${row.ticker}-${author.who}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
+                      {label}: {author.count}x
+                    </span>
+                  );
+                })}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
       <aside className="overlap-card">
         <h2>Shared Tickers</h2>
@@ -331,11 +424,19 @@ function OverlapPanel({ overlap, colorByKey, authorNames }: { overlap: TickerOve
             <div className="shared-item" key={row.ticker}>
               <div className="shared-ticker">{row.ticker}</div>
               <div className="shared-meta">
-                {row.authors.map((author) => (
-                  <span key={`${row.ticker}-${author.who}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
-                    {authorNames[author.who] ?? author.who}: {author.count}x
-                  </span>
-                ))}
+                {row.authors.map((author) => {
+                  const profile = authorByKey[author.who];
+                  const label = authorNames[author.who] ?? author.who;
+                  return profile ? (
+                    <Link key={`${row.ticker}-${author.who}`} href={`/feed/accounts/${profile.slug}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
+                      {label}: {author.count}x
+                    </Link>
+                  ) : (
+                    <span key={`${row.ticker}-${author.who}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
+                      {label}: {author.count}x
+                    </span>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -346,16 +447,20 @@ function OverlapPanel({ overlap, colorByKey, authorNames }: { overlap: TickerOve
 }
 
 function OverlapSvg({ overlap, authorNames }: { overlap: TickerOverlap[]; authorNames: Record<string, string> }) {
-  const lanes = ["shared", ...Object.keys(authorNames)];
+  const chartRows = overlap.filter((row) => row.shared).slice(0, 18);
+  const activeAuthorKeys = Array.from(
+    new Set(chartRows.flatMap((row) => row.authors.map((author) => author.who))),
+  );
+  const lanes = ["shared", ...activeAuthorKeys.slice(0, 8)];
   const labels: Record<string, string> = { shared: "Shared", ...authorNames };
   const width = 1000;
   const height = 540;
   const laneWidth = width / lanes.length;
-  const maxCount = Math.max(...overlap.map((row) => row.total), 1);
-  const nodes = overlap.map((row, index) => {
+  const maxCount = Math.max(...chartRows.map((row) => row.total), 1);
+  const nodes = chartRows.map((row, index) => {
     const lane = row.shared ? "shared" : row.authors[0].who;
     const laneIndex = lanes.indexOf(lane);
-    const inLaneIndex = overlap.filter((item) => (item.shared ? "shared" : item.authors[0].who) === lane).indexOf(row);
+    const inLaneIndex = chartRows.filter((item) => (item.shared ? "shared" : item.authors[0].who) === lane).indexOf(row);
     const radius = Math.max(25, Math.sqrt(row.total / maxCount) * 54);
     const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * Math.min(40, radius);
     const y = 118 + Math.floor(inLaneIndex / 2) * 92 + (index % 3) * 7;

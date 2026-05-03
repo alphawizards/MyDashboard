@@ -1,5 +1,5 @@
 import 'server-only';
-import { authors } from '@/app/lib/static-data';
+import { getTrackedAuthors } from '@/lib/accounts/server';
 import type { Tweet } from '@/app/lib/types';
 
 type XEndpointDiagnostic = {
@@ -21,10 +21,6 @@ export type XRefreshDiagnostics = Record<string, XAuthorRefreshDiagnostic>;
 export function isXConfigured(): boolean {
   return Boolean(process.env.X_BEARER_TOKEN);
 }
-
-const AUTHOR_HANDLES = Object.fromEntries(
-  authors.map((author) => [author.key, author.handle])
-) as Record<string, string>;
 
 const TWEET_FIELDS =
   'id,text,created_at,public_metrics,entities';
@@ -168,6 +164,11 @@ export async function fetchTweetsForAuthorWithDiagnostic(
   return { tweets, diagnostic };
 }
 
+export async function verifyXUserExists(handle: string): Promise<{ exists: boolean; diagnostic: XEndpointDiagnostic }> {
+  const { userId, diagnostic } = await resolveUserIdWithDiagnostic(handle);
+  return { exists: userId !== null, diagnostic };
+}
+
 export async function fetchTweetsForAuthor(
   key: string,
   handle: string
@@ -185,8 +186,13 @@ export async function fetchAllTweetsWithDiagnostics(): Promise<{
   tweetsByAuthor: Record<string, Tweet[]>;
   diagnostics: XRefreshDiagnostics;
 }> {
+  const authors = getTrackedAuthors();
+  const authorHandles = Object.fromEntries(
+    authors.map((author) => [author.key, author.handle])
+  ) as Record<string, string>;
+
   const entries = await Promise.all(
-    Object.entries(AUTHOR_HANDLES).map(
+    Object.entries(authorHandles).map(
       async ([key, handle]) => [key, await fetchTweetsForAuthorWithDiagnostic(key, handle)] as const
     )
   );
