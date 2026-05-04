@@ -329,9 +329,53 @@ a {
 }
 
 .ticker-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   cursor: pointer;
   padding: 4px 9px;
   font-size: 11px;
+}
+
+.ticker-filter-count {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.ticker-filter-count:hover,
+.ticker-filter-count:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ticker-filter-count:focus-visible {
+  outline: 2px solid var(--shared);
+  outline-offset: 2px;
+}
+
+a.ticker-pill,
+a.cashtag-tag,
+.ticker-symbol-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+a.ticker-pill:hover,
+a.cashtag-tag:hover,
+.ticker-symbol-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+a.ticker-pill:focus-visible,
+a.cashtag-tag:focus-visible,
+.ticker-symbol-link:focus-visible {
+  outline: 2px solid var(--shared);
+  outline-offset: 2px;
 }
 
 .ticker-pill.active {
@@ -1367,6 +1411,21 @@ aside {
 .bubble-symbol,
 .bubble-count-label {
   pointer-events: none;
+}
+
+.bubble-node a {
+  cursor: pointer;
+  outline: none;
+}
+
+.bubble-node a:hover circle,
+.bubble-node a:focus-visible circle {
+  filter: brightness(1.08);
+  stroke-width: 4px;
+}
+
+.bubble-node a:focus-visible circle {
+  stroke: #fff;
 }
 
 .bubble-count-label {

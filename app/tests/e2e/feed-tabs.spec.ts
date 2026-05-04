@@ -28,7 +28,7 @@ test("overlap bubble chart packs sorted bubbles into responsive rows", async ({ 
 
   const desktop = await chart.evaluate((element) => {
     const svg = element as SVGSVGElement;
-    const groups = [...svg.querySelectorAll<SVGGElement>("g[aria-label]")];
+    const groups = [...svg.querySelectorAll<SVGGElement>("g.bubble-node")];
     const viewBoxHeight = svg.viewBox.baseVal.height;
     const nodes = groups.map((group) => {
       const circle = group.querySelector("circle");
@@ -36,7 +36,7 @@ test("overlap bubble chart packs sorted bubbles into responsive rows", async ({ 
       const [, x = "0", y = "0"] = group.getAttribute("transform")?.match(/translate\(([^,]+),([^)]+)\)/) ?? [];
 
       return {
-        label: group.getAttribute("aria-label") ?? "",
+        label: group.querySelector("title")?.textContent ?? "",
         radius: Number(circle?.getAttribute("r")),
         x: Number(x),
         y: Number(y),
@@ -73,10 +73,31 @@ test("overlap bubble chart packs sorted bubbles into responsive rows", async ({ 
 
     return {
       height: Number(svg.getAttribute("height")),
-      rows: new Set([...svg.querySelectorAll("g[aria-label]")].map((group) => group.getAttribute("transform")?.match(/,([^)]+)\)/)?.[1])).size,
+      rows: new Set([...svg.querySelectorAll("g.bubble-node")].map((group) => group.getAttribute("transform")?.match(/,([^)]+)\)/)?.[1])).size,
     };
   });
 
   expect(mobile.height).toBeGreaterThan(0);
   expect(mobile.rows).toBeGreaterThanOrEqual(desktop.rows);
+});
+
+test("feed ticker symbols link to Yahoo Finance", async ({ page }) => {
+  await page.goto("/feed");
+
+  const feedTicker = page.locator('.ticker-bar a[href^="https://finance.yahoo.com/quote/"]').first();
+  await expect(feedTicker).toHaveAttribute("target", "_blank");
+  await expect(feedTicker).toHaveAttribute("rel", /noopener noreferrer/);
+
+  const tweetTicker = page.locator('.tweet-cashtags a[href^="https://finance.yahoo.com/quote/"]').first();
+  await expect(tweetTicker).toBeVisible();
+  await expect(tweetTicker).toHaveAttribute("target", "_blank");
+
+  await page.getByRole("button", { name: /^Overlap\b/ }).click();
+  const uniqueTicker = page.locator('.overlap-table a[href^="https://finance.yahoo.com/quote/"]').first();
+  await expect(uniqueTicker).toBeVisible();
+  await expect(uniqueTicker).toHaveAttribute("target", "_blank");
+
+  const bubbleTicker = page.locator('.bubble-svg a[href^="https://finance.yahoo.com/quote/"]').first();
+  await expect(bubbleTicker).toHaveAttribute("target", "_blank");
+  await expect(bubbleTicker).toHaveAttribute("aria-label", /Open .+ on Yahoo Finance/);
 });
