@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties, type MouseEventHandler, type ReactNode } from "react";
 import { buildTickerCounts, buildTickerMentionGroups } from "../lib/overlap";
 import type { AccountUniqueTickerGroup, AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
 import { initialsFromName } from "../lib/accounts";
@@ -50,6 +50,52 @@ function formatRefreshTime(timestamp: string) {
     dateStyle: "medium",
     timeStyle: "short",
   })} AEST`;
+}
+
+function normalizeTicker(ticker: string) {
+  return ticker.trim().replace(/^\$/, "");
+}
+
+function getYahooFinanceUrl(ticker: string) {
+  const normalized = normalizeTicker(ticker);
+
+  return normalized ? `https://finance.yahoo.com/quote/${encodeURIComponent(normalized)}` : null;
+}
+
+function TickerLink({
+  ticker,
+  children,
+  className,
+  onClick,
+  style,
+}: {
+  ticker: string;
+  children?: ReactNode;
+  className?: string;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
+  style?: CSSProperties;
+}) {
+  const href = getYahooFinanceUrl(ticker);
+
+  if (!href) {
+    return <span className={className} style={style}>{children ?? ticker}</span>;
+  }
+
+  const label = normalizeTicker(ticker);
+
+  return (
+    <a
+      aria-label={`Open ${label} on Yahoo Finance`}
+      className={className}
+      href={href}
+      onClick={onClick}
+      rel="noopener noreferrer"
+      style={style}
+      target="_blank"
+    >
+      {children ?? ticker}
+    </a>
+  );
 }
 
 export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLastRefreshTime, accountCreationEnabled = false }: FeedClientProps) {
@@ -293,14 +339,24 @@ function TickerBar({
     <div className="ticker-bar">
       <span className="bar-label">Tickers</span>
       {tickers.map(([ticker, count]) => (
-        <button
+        <span
           className={`ticker-pill ${selected === ticker ? "active" : ""}`}
           key={ticker}
-          onClick={() => onSelect(selected === ticker ? null : ticker)}
           style={{ borderColor: "#3a4a6a", color: "#c8d4e3", background: "#101624" }}
         >
-          {ticker} <span className="count">x{count}</span>
-        </button>
+          <TickerLink
+            className="ticker-symbol-link"
+            ticker={ticker}
+          />
+          <button
+            aria-label={`${selected === ticker ? "Clear" : "Filter by"} ${ticker} mentions`}
+            className="ticker-filter-count"
+            onClick={() => onSelect(selected === ticker ? null : ticker)}
+            type="button"
+          >
+            x{count}
+          </button>
+        </span>
       ))}
     </div>
   );
@@ -342,13 +398,13 @@ function TweetCard({
       {tweet.cashtags.length ? (
         <div className="tweet-cashtags">
           {tweet.cashtags.map((tag, index) => (
-            <span
+            <TickerLink
               className="cashtag-tag"
               key={`${tweet.id}-${tag}-${index}`}
+              onClick={(event) => event.stopPropagation()}
               style={{ borderColor: author.color, color: author.color, background: "#101624" }}
-            >
-              {tag}
-            </span>
+              ticker={tag}
+            />
           ))}
         </div>
       ) : null}
@@ -432,9 +488,14 @@ function UniqueTickerTable({
             <span className="shared-meta">
               {group.tickers.length ? (
                 group.tickers.map((ticker) => (
-                  <span className="ticker-pill" key={`${group.who}-${ticker.ticker}`} style={{ borderColor: color, color }}>
+                  <TickerLink
+                    className="ticker-pill"
+                    key={`${group.who}-${ticker.ticker}`}
+                    style={{ borderColor: color, color }}
+                    ticker={ticker.ticker}
+                  >
                     {ticker.ticker} <span className="count">x{ticker.count}</span>
-                  </span>
+                  </TickerLink>
                 ))
               ) : (
                 <span>No unique tickers</span>
@@ -459,8 +520,9 @@ function OverlapSvg({ shared, authorNames }: { shared: TickerOverlap[]; authorNa
         {nodes.map((node) => {
           const symbol = node.ticker.replace("$", "");
           const showCountInside = node.radius >= 48;
-          return (
-            <g key={node.ticker} aria-label={node.label} transform={`translate(${node.x},${node.y})`}>
+          const href = getYahooFinanceUrl(node.ticker);
+          const bubbleContent = (
+            <>
               <title>{node.label}</title>
               <circle
                 fill={node.color}
@@ -490,6 +552,21 @@ function OverlapSvg({ shared, authorNames }: { shared: TickerOverlap[]; authorNa
                   {node.total} mentions
                 </text>
               ) : null}
+            </>
+          );
+
+          return (
+            <g className="bubble-node" key={node.ticker} transform={`translate(${node.x},${node.y})`}>
+              {href ? (
+                <a
+                  aria-label={`Open ${symbol} on Yahoo Finance`}
+                  href={href}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {bubbleContent}
+                </a>
+              ) : bubbleContent}
             </g>
           );
         })}
