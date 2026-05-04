@@ -20,7 +20,7 @@ describe("prototype route source", () => {
   it("has feed and watchlist routes with parity anchors", () => {
     const feed = readAppFile("feed/page.tsx");
     const feedClient = readAppFile("feed/feed-client.tsx");
-    const watchlist = readAppFile("watchlist/page.tsx");
+    const watchlist = readAppFile("watchlist/watchlist-dashboard.tsx");
     const portfolios = readAppFile("portfolios/page.tsx");
     const portfolioTabs = readAppFile("portfolios/portfolio-tabs.tsx");
 

@@ -51,6 +51,25 @@ export type Stock = {
   priority: "low" | "medium" | "high" | string;
 };
 
+export type FarsideFlowRow = {
+  date: string;
+  values: Record<string, string>;
+};
+
+export type WatchlistDashboardData = {
+  refreshedAt: string;
+  watchlistRefreshedAt: string;
+  watchlistRefreshedAtLabel: string;
+  farsideRefreshedAt: string;
+  farsideRefreshedAtLabel: string;
+  watchlist: Stock[];
+  farsideFlows: FarsideFlowRow[];
+};
+
+export type WatchlistRefreshResponse = WatchlistDashboardData & {
+  ok: true;
+};
+
 export type TickerAuthorCount = {
   who: AuthorKey;
   count: number;
