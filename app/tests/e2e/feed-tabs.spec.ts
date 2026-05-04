@@ -17,3 +17,66 @@ test("feed tabs switch visible content", async ({ page }) => {
     await expect(page.getByText(check.text).first()).toBeVisible();
   }
 });
+
+test("overlap bubble chart packs sorted bubbles into responsive rows", async ({ page }) => {
+  await page.goto("/feed");
+  await page.getByRole("button", { name: /^Overlap\b/ }).click();
+
+  const chart = page.locator(".bubble-svg");
+  await expect(chart).toBeVisible();
+  await expect(page.getByText("Sorted by total mentions")).toBeVisible();
+
+  const desktop = await chart.evaluate((element) => {
+    const svg = element as SVGSVGElement;
+    const groups = [...svg.querySelectorAll<SVGGElement>("g[aria-label]")];
+    const viewBoxHeight = svg.viewBox.baseVal.height;
+    const nodes = groups.map((group) => {
+      const circle = group.querySelector("circle");
+      const bbox = group.getBBox();
+      const [, x = "0", y = "0"] = group.getAttribute("transform")?.match(/translate\(([^,]+),([^)]+)\)/) ?? [];
+
+      return {
+        label: group.getAttribute("aria-label") ?? "",
+        radius: Number(circle?.getAttribute("r")),
+        x: Number(x),
+        y: Number(y),
+        bboxBottom: bbox.y + bbox.height,
+        bboxTop: bbox.y,
+      };
+    });
+
+    return {
+      height: Number(svg.getAttribute("height")),
+      viewBoxHeight,
+      nodes,
+      rows: new Set(nodes.map((node) => node.y)).size,
+      visibleHeight: svg.getBoundingClientRect().height,
+    };
+  });
+
+  expect(desktop.height).toBe(desktop.viewBoxHeight);
+  expect(desktop.visibleHeight).toBeLessThanOrEqual(desktop.height + 1);
+  expect(desktop.nodes.length).toBeGreaterThan(0);
+  expect(desktop.nodes.every((node, index) => index === 0 || desktop.nodes[index - 1].radius >= node.radius)).toBe(true);
+  expect(desktop.nodes[0].radius).toBeCloseTo(60, 1);
+  expect(desktop.nodes.at(-1)?.radius).toBeLessThan(desktop.nodes[0].radius);
+  expect(desktop.nodes[0].label).toMatch(/ - .+ \d+x/);
+
+  for (const node of desktop.nodes) {
+    expect(node.y + node.bboxTop).toBeGreaterThanOrEqual(0);
+    expect(node.y + node.bboxBottom).toBeLessThanOrEqual(desktop.height);
+  }
+
+  await page.setViewportSize({ width: 360, height: 900 });
+  const mobile = await chart.evaluate((element) => {
+    const svg = element as SVGSVGElement;
+
+    return {
+      height: Number(svg.getAttribute("height")),
+      rows: new Set([...svg.querySelectorAll("g[aria-label]")].map((group) => group.getAttribute("transform")?.match(/,([^)]+)\)/)?.[1])).size,
+    };
+  });
+
+  expect(mobile.height).toBeGreaterThan(0);
+  expect(mobile.rows).toBeGreaterThanOrEqual(desktop.rows);
+});

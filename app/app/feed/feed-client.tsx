@@ -385,7 +385,7 @@ function OverlapPanel({
       <div className="overlap-card">
         <h2>Shared Ticker Mention Map</h2>
         <p className="subtitle">
-          Top shared tickers stay in the chart; the table keeps the full account set readable.
+          Sorted by total mentions · bubble size reflects mention count
         </p>
         <OverlapSvg shared={shared} authorNames={authorNames} />
         <UniqueTickerTable
@@ -450,36 +450,18 @@ function UniqueTickerTable({
 function OverlapSvg({ shared, authorNames }: { shared: TickerOverlap[]; authorNames: Record<string, string> }) {
   const [frameRef, frameSize] = useResizeObserver<HTMLDivElement>();
   const width = Math.max(frameSize.width || 720, 320);
-  const height = Math.max(frameSize.height || Math.round(width * 0.54), 320);
-  const columnCount = Math.max(1, Math.floor(width / 120));
-  const rowCapacity = Math.max(8, Math.min(30, Math.floor((height - 80) / 70) * columnCount));
-  const chartRows = shared.slice(0, rowCapacity);
-  const maxCount = Math.max(...chartRows.map((row) => row.total), 1);
-  const xStep = width / Math.max(1, columnCount);
-  const yStep = Math.max(66, (height - 110) / Math.max(1, Math.ceil(chartRows.length / columnCount)));
-  const nodes = chartRows.map((row, index) => {
-    const column = index % columnCount;
-    const rowIndex = Math.floor(index / columnCount);
-    const radius = Math.max(20, Math.min(58, Math.sqrt(row.total / maxCount) * Math.min(58, xStep * 0.32)));
-    const x = column * xStep + xStep / 2;
-    const y = 72 + rowIndex * yStep;
-    return { ...row, radius, x, y: Math.min(y, height - radius - 20) };
-  });
+  const { height, nodes } = useMemo(() => buildBubbleLayout(shared, authorNames, width), [authorNames, shared, width]);
 
   return (
     <div className="chart-frame" ref={frameRef}>
-      <svg className="bubble-svg" role="img" viewBox={`0 0 ${width} ${height}`}>
+      <svg className="bubble-svg" role="img" height={height} viewBox={`0 0 ${width} ${height}`}>
         <title>Shared ticker overlap bubble chart</title>
-        <rect className="bubble-lane-bg" x={8} y={48} width={Math.max(0, width - 16)} height={height - 70} rx={10} />
-        <text className="bubble-lane-label" textAnchor="middle" x={width / 2} y={28}>
-          Shared tickers ({nodes.length})
-        </text>
         {nodes.map((node) => {
           const symbol = node.ticker.replace("$", "");
-          const title = `${node.ticker} - ${node.authors.map((author) => `${authorNames[author.who]} ${author.count}x`).join(" | ")}`;
+          const showCountInside = node.radius >= 48;
           return (
-            <g key={node.ticker} transform={`translate(${node.x},${node.y})`}>
-              <title>{title}</title>
+            <g key={node.ticker} aria-label={node.label} transform={`translate(${node.x},${node.y})`}>
+              <title>{node.label}</title>
               <circle
                 fill={node.color}
                 fillOpacity={node.shared ? 0.92 : 0.78}
@@ -488,17 +470,23 @@ function OverlapSvg({ shared, authorNames }: { shared: TickerOverlap[]; authorNa
                 strokeWidth={node.shared ? 3 : 1.5}
               />
               <text
+                className="bubble-symbol"
                 fill="#08111f"
                 fontFamily="monospace"
-                fontSize={node.radius > 38 ? 14 : 11}
+                fontSize={showCountInside ? 16 : 13}
                 fontWeight="900"
                 textAnchor="middle"
-                y={node.total > 1 ? -2 : 5}
+                y={showCountInside ? -4 : 5}
               >
                 {symbol}
               </text>
-              {node.total > 1 ? (
-                <text fill="rgba(8,17,31,0.7)" fontSize="10" fontWeight="800" textAnchor="middle" y="16">
+              {showCountInside ? (
+                <text fill="rgba(8,17,31,0.72)" fontSize="11" fontWeight="800" textAnchor="middle" y="17">
+                  {node.total} mentions
+                </text>
+              ) : null}
+              {!showCountInside ? (
+                <text className="bubble-count-label" textAnchor="middle" y={node.radius + 17}>
                   {node.total} mentions
                 </text>
               ) : null}
@@ -508,4 +496,77 @@ function OverlapSvg({ shared, authorNames }: { shared: TickerOverlap[]; authorNa
       </svg>
     </div>
   );
+}
+
+type BubbleNode = TickerOverlap & {
+  radius: number;
+  x: number;
+  y: number;
+  label: string;
+};
+
+const BUBBLE_MIN_RADIUS = 28;
+const BUBBLE_MAX_RADIUS = 60;
+const BUBBLE_GAP = 18;
+const BUBBLE_TOP_BOTTOM_PADDING = 20;
+const BUBBLE_SIDE_PADDING = 8;
+const BUBBLE_SMALL_LABEL_HEIGHT = 18;
+
+function buildBubbleLayout(
+  shared: TickerOverlap[],
+  authorNames: Record<string, string>,
+  width: number,
+): { height: number; nodes: BubbleNode[] } {
+  const sorted = [...shared].sort((a, b) => b.total - a.total || a.ticker.localeCompare(b.ticker));
+  const maxMentions = Math.max(...sorted.map((row) => row.total), 1);
+  const drawableWidth = Math.max(width - BUBBLE_SIDE_PADDING * 2, BUBBLE_MAX_RADIUS * 2);
+  const nodes: BubbleNode[] = sorted.map((row) => ({
+    ...row,
+    radius: BUBBLE_MIN_RADIUS + Math.sqrt(row.total / maxMentions) * (BUBBLE_MAX_RADIUS - BUBBLE_MIN_RADIUS),
+    x: 0,
+    y: 0,
+    label: `${row.ticker} - ${row.authors.map((author) => `${authorNames[author.who] ?? author.who} ${author.count}x`).join(" | ")}`,
+  }));
+
+  let row: BubbleNode[] = [];
+  let cursorX = BUBBLE_SIDE_PADDING;
+  let cursorY = BUBBLE_TOP_BOTTOM_PADDING;
+
+  function flushRow() {
+    if (!row.length) return;
+
+    const rowRadius = Math.max(...row.map((node) => node.radius));
+    const rowLabelHeight = row.some((node) => node.radius < 48) ? BUBBLE_SMALL_LABEL_HEIGHT : 0;
+    const rowCenterY = cursorY + rowRadius;
+
+    row.forEach((node) => {
+      node.y = rowCenterY;
+    });
+
+    cursorY += rowRadius * 2 + rowLabelHeight + BUBBLE_GAP;
+    row = [];
+    cursorX = BUBBLE_SIDE_PADDING;
+  }
+
+  nodes.forEach((node) => {
+    const diameter = node.radius * 2;
+    const nextRight = cursorX + diameter;
+    const rowHasSpace = nextRight <= BUBBLE_SIDE_PADDING + drawableWidth;
+
+    if (row.length && !rowHasSpace) {
+      flushRow();
+    }
+
+    node.x = cursorX + node.radius;
+    row.push(node);
+    cursorX += diameter + BUBBLE_GAP;
+  });
+
+  flushRow();
+
+  const height = nodes.length
+    ? Math.ceil(cursorY - BUBBLE_GAP + BUBBLE_TOP_BOTTOM_PADDING)
+    : BUBBLE_TOP_BOTTOM_PADDING * 2;
+
+  return { height, nodes };
 }
