@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { buildTickerCounts, buildTickerOverlap } from "../lib/overlap";
 import type { AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
 import { initialsFromName } from "../lib/accounts";
+import { useResizeObserver } from "../lib/use-resize-observer";
 import { AddAccountForm } from "./add-account-form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -447,68 +448,76 @@ function OverlapPanel({
 }
 
 function OverlapSvg({ overlap, authorNames }: { overlap: TickerOverlap[]; authorNames: Record<string, string> }) {
-  const chartRows = overlap.filter((row) => row.shared).slice(0, 18);
+  const [frameRef, frameSize] = useResizeObserver<HTMLDivElement>();
+  const width = Math.max(frameSize.width || 720, 320);
+  const height = Math.max(frameSize.height || Math.round(width * 0.54), 320);
+  const laneCapacity = Math.max(2, Math.min(8, Math.floor(width / 132) - 1));
+  const rowCapacity = Math.max(8, Math.min(30, Math.floor((height - 90) / 58) * Math.max(laneCapacity, 1)));
+  const chartRows = overlap.slice(0, rowCapacity);
   const activeAuthorKeys = Array.from(
     new Set(chartRows.flatMap((row) => row.authors.map((author) => author.who))),
   );
-  const lanes = ["shared", ...activeAuthorKeys.slice(0, 8)];
+  const lanes = ["shared", ...activeAuthorKeys.slice(0, laneCapacity)];
   const labels: Record<string, string> = { shared: "Shared", ...authorNames };
-  const width = 1000;
-  const height = 540;
   const laneWidth = width / lanes.length;
   const maxCount = Math.max(...chartRows.map((row) => row.total), 1);
+  const laneCounts = new Map<string, number>();
   const nodes = chartRows.map((row, index) => {
     const lane = row.shared ? "shared" : row.authors[0].who;
-    const laneIndex = lanes.indexOf(lane);
-    const inLaneIndex = chartRows.filter((item) => (item.shared ? "shared" : item.authors[0].who) === lane).indexOf(row);
-    const radius = Math.max(25, Math.sqrt(row.total / maxCount) * 54);
-    const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * Math.min(40, radius);
-    const y = 118 + Math.floor(inLaneIndex / 2) * 92 + (index % 3) * 7;
-    return { ...row, lane, radius, x, y: Math.min(y, height - radius - 20) };
+    const visibleLane = lanes.includes(lane) ? lane : "shared";
+    const laneIndex = Math.max(0, lanes.indexOf(visibleLane));
+    const inLaneIndex = laneCounts.get(visibleLane) ?? 0;
+    laneCounts.set(visibleLane, inLaneIndex + 1);
+    const radius = Math.max(18, Math.min(54, Math.sqrt(row.total / maxCount) * Math.min(54, laneWidth * 0.26)));
+    const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * Math.min(28, radius * 0.65);
+    const y = 92 + Math.floor(inLaneIndex / 2) * Math.max(62, radius * 1.45) + (index % 3) * 5;
+    return { ...row, lane: visibleLane, radius, x, y: Math.min(y, height - radius - 20) };
   });
 
   return (
-    <svg className="bubble-svg" role="img" viewBox={`0 0 ${width} ${height}`}>
-      <title>Ticker overlap bubble chart</title>
-      {lanes.map((lane, index) => (
-        <g key={lane}>
-          <rect className="bubble-lane-bg" x={index * laneWidth + 10} y={48} width={laneWidth - 20} height={470} rx={10} />
-          <text className="bubble-lane-label" textAnchor="middle" x={index * laneWidth + laneWidth / 2} y={28}>
-            {labels[lane]} ({nodes.filter((node) => node.lane === lane).length})
-          </text>
-        </g>
-      ))}
-      {nodes.map((node) => {
-        const symbol = node.ticker.replace("$", "");
-        const title = `${node.ticker} - ${node.authors.map((author) => `${authorNames[author.who]} ${author.count}x`).join(" | ")}`;
-        return (
-          <g key={node.ticker} transform={`translate(${node.x},${node.y})`}>
-            <title>{title}</title>
-            <circle
-              fill={node.color}
-              fillOpacity={node.shared ? 0.92 : 0.78}
-              r={node.radius}
-              stroke={node.shared ? "#ffd166" : node.color}
-              strokeWidth={node.shared ? 3 : 1.5}
-            />
-            <text
-              fill="#08111f"
-              fontFamily="monospace"
-              fontSize={node.radius > 42 ? 15 : 12}
-              fontWeight="900"
-              textAnchor="middle"
-              y={node.total > 1 ? -2 : 5}
-            >
-              {symbol}
+    <div className="chart-frame" ref={frameRef}>
+      <svg className="bubble-svg" role="img" viewBox={`0 0 ${width} ${height}`}>
+        <title>Ticker overlap bubble chart</title>
+        {lanes.map((lane, index) => (
+          <g key={lane}>
+            <rect className="bubble-lane-bg" x={index * laneWidth + 8} y={48} width={Math.max(0, laneWidth - 16)} height={height - 70} rx={10} />
+            <text className="bubble-lane-label" textAnchor="middle" x={index * laneWidth + laneWidth / 2} y={28}>
+              {labels[lane]} ({nodes.filter((node) => node.lane === lane).length})
             </text>
-            {node.total > 1 ? (
-              <text fill="rgba(8,17,31,0.7)" fontSize="10" fontWeight="800" textAnchor="middle" y="16">
-                {node.total} mentions
-              </text>
-            ) : null}
           </g>
-        );
-      })}
-    </svg>
+        ))}
+        {nodes.map((node) => {
+          const symbol = node.ticker.replace("$", "");
+          const title = `${node.ticker} - ${node.authors.map((author) => `${authorNames[author.who]} ${author.count}x`).join(" | ")}`;
+          return (
+            <g key={node.ticker} transform={`translate(${node.x},${node.y})`}>
+              <title>{title}</title>
+              <circle
+                fill={node.color}
+                fillOpacity={node.shared ? 0.92 : 0.78}
+                r={node.radius}
+                stroke={node.shared ? "#ffd166" : node.color}
+                strokeWidth={node.shared ? 3 : 1.5}
+              />
+              <text
+                fill="#08111f"
+                fontFamily="monospace"
+                fontSize={node.radius > 38 ? 14 : 11}
+                fontWeight="900"
+                textAnchor="middle"
+                y={node.total > 1 ? -2 : 5}
+              >
+                {symbol}
+              </text>
+              {node.total > 1 ? (
+                <text fill="rgba(8,17,31,0.7)" fontSize="10" fontWeight="800" textAnchor="middle" y="16">
+                  {node.total} mentions
+                </text>
+              ) : null}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }

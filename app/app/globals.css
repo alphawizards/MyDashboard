@@ -1112,3 +1112,297 @@ a {
 .add-account-msg.error {
   color: #f43f5e;
 }
+
+/* Responsive layout primitives */
+html,
+body {
+  min-width: 0;
+  overflow-x: clip;
+}
+
+body,
+main,
+section,
+article,
+aside,
+header,
+nav,
+div,
+form {
+  min-width: 0;
+}
+
+main,
+section,
+article,
+aside {
+  min-height: 0;
+}
+
+.app-shell {
+  min-height: 100dvh;
+  overflow-x: clip;
+  padding: clamp(14px, 2.4vw, 28px);
+}
+
+.page-header,
+.nav-actions,
+.tab-bar,
+.filter-bar,
+.ticker-bar,
+.tweet-meta,
+.tweet-footer,
+.stock-row,
+.stock-metrics,
+.shared-meta,
+.portfolio-section-header {
+  min-width: 0;
+}
+
+.nav-actions {
+  justify-content: flex-end;
+}
+
+.home-grid,
+.authors-bar,
+.tweet-grid,
+.watchlist-grid,
+.market-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+}
+
+.tweet-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.home-grid {
+  max-width: none;
+}
+
+.tweet-card,
+.stock-card,
+.market-card,
+.overlap-card,
+.account-profile,
+.account-panel,
+.portfolio-hero-card,
+.portfolio-holdings-card,
+.home-card,
+.author-card,
+.shared-item,
+.metric,
+.portfolio-empty {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.author-card,
+.portfolio-hero-card,
+.portfolio-holdings-card,
+.tweet-card {
+  container-type: inline-size;
+}
+
+.author-info,
+.analyst-name-cell,
+.account-profile-main,
+.portfolio-summary,
+.portfolio-holding-row > div,
+.stock-row > div,
+.shared-meta,
+.tweet-cashtags {
+  min-width: 0;
+}
+
+.author-info h2,
+.handle,
+.bio,
+.analyst-name-cell strong,
+.analyst-name-cell small,
+.account-profile-main h2,
+.account-profile-main a,
+.portfolio-visual h2,
+.portfolio-meta-grid span,
+.portfolio-holding-row strong,
+.portfolio-holding-row span,
+.stock-company,
+.shared-meta a,
+.shared-meta span,
+.ticker-pill,
+.cashtag-tag,
+.author-badge,
+.count {
+  overflow-wrap: anywhere;
+}
+
+.author-stats {
+  min-width: max-content;
+}
+
+.tab-bar {
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.tab-btn {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.search-input {
+  width: min(100%, 320px);
+  flex: 1 1 220px;
+}
+
+.tweet-card {
+  min-height: clamp(180px, 24cqi, 220px);
+}
+
+.eng-row,
+.stock-row,
+.tweet-meta,
+.tweet-footer,
+.portfolio-section-header {
+  flex-wrap: wrap;
+}
+
+.analyst-panel,
+.overlap-table,
+.farside-prototype {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.analyst-header,
+.analyst-row {
+  grid-template-columns: minmax(180px, 1.4fr) minmax(70px, 0.5fr) minmax(76px, 0.5fr) minmax(88px, 0.5fr) minmax(64px, 0.4fr);
+  min-width: min(680px, 100%);
+}
+
+.overlap-layout {
+  grid-template-columns: minmax(min(100%, 520px), 1fr) minmax(min(100%, 280px), 0.42fr);
+}
+
+.overlap-card {
+  overflow: hidden;
+}
+
+.chart-frame {
+  width: 100%;
+  min-width: 0;
+  min-height: clamp(300px, 48cqi, 560px);
+  container-type: inline-size;
+}
+
+.bubble-svg {
+  width: 100%;
+  height: auto;
+  min-height: 300px;
+  overflow: visible;
+}
+
+.overlap-table-row {
+  grid-template-columns: minmax(80px, 0.4fr) minmax(54px, 0.2fr) minmax(0, 1fr);
+  min-width: min(520px, 100%);
+}
+
+.account-profile {
+  grid-template-columns: auto minmax(0, 1fr) minmax(min(100%, 280px), auto);
+}
+
+.account-avatar {
+  width: clamp(52px, 8vw, 72px);
+  height: clamp(52px, 8vw, 72px);
+}
+
+.account-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 70px), 1fr));
+}
+
+.account-metrics span,
+.account-metrics strong,
+.account-metrics small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.account-layout {
+  grid-template-columns: minmax(min(100%, 280px), 0.8fr) minmax(min(100%, 340px), 1.2fr);
+}
+
+.market-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+.stock-row > div:first-child {
+  flex: 1 1 min(100%, 160px);
+}
+
+.stock-row > div:last-child {
+  flex: 0 1 auto;
+}
+
+.farside-prototype {
+  max-height: min(70dvh, 520px);
+  overflow-y: auto;
+}
+
+.farside-prototype table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.portfolio-layout {
+  grid-template-columns: minmax(min(100%, 320px), 0.85fr) minmax(min(100%, 360px), 1.15fr);
+}
+
+.portfolio-visual {
+  min-height: clamp(220px, 32cqi, 320px);
+}
+
+.portfolio-visual h2 {
+  font-size: clamp(24px, 5cqi, 34px);
+}
+
+.portfolio-return {
+  font-size: clamp(26px, 6cqi, 34px);
+}
+
+.portfolio-pending {
+  font-size: clamp(22px, 5cqi, 28px);
+}
+
+.portfolio-holding-row {
+  grid-template-columns: minmax(0, 1fr) minmax(min(100%, 160px), 0.9fr);
+}
+
+.portfolio-weight {
+  grid-template-columns: minmax(36px, auto) minmax(0, 1fr);
+}
+
+@media (max-width: 980px) {
+  body .overlap-layout,
+  body .portfolio-layout,
+  body .account-profile,
+  body .account-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .author-card {
+    align-items: flex-start;
+  }
+
+  .author-stats {
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .refresh-bar,
+  .tweet-meta,
+  .tweet-footer {
+    align-items: flex-start;
+  }
+}
