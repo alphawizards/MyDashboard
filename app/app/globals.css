@@ -1381,11 +1381,27 @@ aside {
   grid-template-columns: minmax(36px, auto) minmax(0, 1fr);
 }
 
+.overlap-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.unique-ticker-row {
+  grid-template-columns: minmax(120px, 0.35fr) minmax(140px, 0.35fr) minmax(0, 1fr);
+}
+
+.unique-ticker-row .shared-meta:last-child {
+  gap: 6px;
+}
+
 @media (max-width: 980px) {
   body .overlap-layout,
   body .portfolio-layout,
   body .account-profile,
   body .account-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .unique-ticker-row {
     grid-template-columns: minmax(0, 1fr);
   }
 }

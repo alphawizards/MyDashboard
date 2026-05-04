@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { buildTickerCounts, buildTickerOverlap } from "../lib/overlap";
-import type { AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
+import { buildTickerCounts, buildTickerMentionGroups } from "../lib/overlap";
+import type { AccountUniqueTickerGroup, AuthorProfile, TickerOverlap, Tweet } from "../lib/types";
 import { initialsFromName } from "../lib/accounts";
 import { useResizeObserver } from "../lib/use-resize-observer";
 import { AddAccountForm } from "./add-account-form";
@@ -99,8 +99,8 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
         .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1)),
     [tweetsByAuthor],
   );
-  const overlap = useMemo(() => buildTickerOverlap(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
-  const sharedOverlap = overlap.filter((row) => row.shared);
+  const tickerGroups = useMemo(() => buildTickerMentionGroups(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
+  const sharedOverlap = tickerGroups.shared;
   const activeAuthor = tab !== "all" && tab !== "overlap" ? tab : null;
   const activeTweets = activeAuthor ? tweetsByAuthor[activeAuthor] ?? [] : allTweets;
   const sourceTweets = activeAuthor ? activeTweets.map((tweet) => ({ ...tweet, who: activeAuthor })) : allTweets;
@@ -187,7 +187,7 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
       </nav>
 
       {tab === "overlap" ? (
-        <OverlapPanel overlap={overlap} colorByKey={colorByKey} authorByKey={authorByKey} authorNames={authorNames} />
+        <OverlapPanel shared={tickerGroups.shared} uniqueByAuthor={tickerGroups.uniqueByAuthor} colorByKey={colorByKey} authorByKey={authorByKey} authorNames={authorNames} />
       ) : (
         <>
           <div className="filter-bar">
@@ -368,124 +368,112 @@ function TweetCard({
 }
 
 function OverlapPanel({
-  overlap,
+  shared,
+  uniqueByAuthor,
   colorByKey,
   authorByKey,
   authorNames,
 }: {
-  overlap: TickerOverlap[];
+  shared: TickerOverlap[];
+  uniqueByAuthor: AccountUniqueTickerGroup[];
   colorByKey: Record<string, string>;
   authorByKey: Record<string, AuthorProfile>;
   authorNames: Record<string, string>;
 }) {
-  const shared = overlap.filter((row) => row.shared);
-  const tableRows = overlap.slice(0, 24);
-
   return (
     <section className="overlap-layout">
       <div className="overlap-card">
-        <h2>Ticker Mention Map</h2>
+        <h2>Shared Ticker Mention Map</h2>
         <p className="subtitle">
           Top shared tickers stay in the chart; the table keeps the full account set readable.
         </p>
-        <OverlapSvg overlap={overlap} authorNames={authorNames} />
-        <div className="overlap-table" role="table" aria-label="Ticker overlap details">
-          <div className="overlap-table-row overlap-table-head" role="row">
-            <span>Ticker</span>
-            <span>Total</span>
-            <span>Accounts</span>
-          </div>
-          {tableRows.map((row) => (
-            <div className="overlap-table-row" role="row" key={row.ticker}>
-              <span className="shared-ticker">{row.ticker}</span>
-              <span>{row.total}</span>
-              <span className="shared-meta">
-                {row.authors.map((author) => {
-                  const profile = authorByKey[author.who];
-                  const label = authorNames[author.who] ?? author.who;
-                  return profile ? (
-                    <Link key={`${row.ticker}-${author.who}`} href={`/feed/accounts/${profile.slug}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
-                      {label}: {author.count}x
-                    </Link>
-                  ) : (
-                    <span key={`${row.ticker}-${author.who}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
-                      {label}: {author.count}x
-                    </span>
-                  );
-                })}
-              </span>
-            </div>
-          ))}
-        </div>
+        <OverlapSvg shared={shared} authorNames={authorNames} />
+        <UniqueTickerTable
+          uniqueByAuthor={uniqueByAuthor}
+          colorByKey={colorByKey}
+          authorByKey={authorByKey}
+        />
       </div>
-      <aside className="overlap-card">
-        <h2>Shared Tickers</h2>
-        <div className="shared-list">
-          {shared.map((row) => (
-            <div className="shared-item" key={row.ticker}>
-              <div className="shared-ticker">{row.ticker}</div>
-              <div className="shared-meta">
-                {row.authors.map((author) => {
-                  const profile = authorByKey[author.who];
-                  const label = authorNames[author.who] ?? author.who;
-                  return profile ? (
-                    <Link key={`${row.ticker}-${author.who}`} href={`/feed/accounts/${profile.slug}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
-                      {label}: {author.count}x
-                    </Link>
-                  ) : (
-                    <span key={`${row.ticker}-${author.who}`} style={{ color: colorByKey[author.who] ?? "#94a3b8" }}>
-                      {label}: {author.count}x
-                    </span>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
     </section>
   );
 }
 
-function OverlapSvg({ overlap, authorNames }: { overlap: TickerOverlap[]; authorNames: Record<string, string> }) {
+function UniqueTickerTable({
+  uniqueByAuthor,
+  colorByKey,
+  authorByKey,
+}: {
+  uniqueByAuthor: AccountUniqueTickerGroup[];
+  colorByKey: Record<string, string>;
+  authorByKey: Record<string, AuthorProfile>;
+}) {
+  return (
+    <div className="overlap-table" role="table" aria-label="Unique ticker mentions by account">
+      <div className="overlap-table-row overlap-table-head unique-ticker-row" role="row">
+        <span>Account</span>
+        <span>Handle</span>
+        <span>Unique tickers</span>
+      </div>
+      {uniqueByAuthor.map((group) => {
+        const profile = authorByKey[group.who];
+        const color = colorByKey[group.who] ?? "#94a3b8";
+        return (
+          <div className="overlap-table-row unique-ticker-row" role="row" key={group.who}>
+            <span className="shared-ticker" style={{ color }}>
+              {profile ? (
+                <Link href={`/feed/accounts/${profile.slug}`}>{profile.shortName}</Link>
+              ) : (
+                group.who
+              )}
+            </span>
+            <span className="shared-meta">
+              {profile ? `@${profile.handle}` : "-"}
+            </span>
+            <span className="shared-meta">
+              {group.tickers.length ? (
+                group.tickers.map((ticker) => (
+                  <span className="ticker-pill" key={`${group.who}-${ticker.ticker}`} style={{ borderColor: color, color }}>
+                    {ticker.ticker} <span className="count">x{ticker.count}</span>
+                  </span>
+                ))
+              ) : (
+                <span>No unique tickers</span>
+              )}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function OverlapSvg({ shared, authorNames }: { shared: TickerOverlap[]; authorNames: Record<string, string> }) {
   const [frameRef, frameSize] = useResizeObserver<HTMLDivElement>();
   const width = Math.max(frameSize.width || 720, 320);
   const height = Math.max(frameSize.height || Math.round(width * 0.54), 320);
-  const laneCapacity = Math.max(2, Math.min(8, Math.floor(width / 132) - 1));
-  const rowCapacity = Math.max(8, Math.min(30, Math.floor((height - 90) / 58) * Math.max(laneCapacity, 1)));
-  const chartRows = overlap.slice(0, rowCapacity);
-  const activeAuthorKeys = Array.from(
-    new Set(chartRows.flatMap((row) => row.authors.map((author) => author.who))),
-  );
-  const lanes = ["shared", ...activeAuthorKeys.slice(0, laneCapacity)];
-  const labels: Record<string, string> = { shared: "Shared", ...authorNames };
-  const laneWidth = width / lanes.length;
+  const columnCount = Math.max(1, Math.floor(width / 120));
+  const rowCapacity = Math.max(8, Math.min(30, Math.floor((height - 80) / 70) * columnCount));
+  const chartRows = shared.slice(0, rowCapacity);
   const maxCount = Math.max(...chartRows.map((row) => row.total), 1);
-  const laneCounts = new Map<string, number>();
+  const xStep = width / Math.max(1, columnCount);
+  const yStep = Math.max(66, (height - 110) / Math.max(1, Math.ceil(chartRows.length / columnCount)));
   const nodes = chartRows.map((row, index) => {
-    const lane = row.shared ? "shared" : row.authors[0].who;
-    const visibleLane = lanes.includes(lane) ? lane : "shared";
-    const laneIndex = Math.max(0, lanes.indexOf(visibleLane));
-    const inLaneIndex = laneCounts.get(visibleLane) ?? 0;
-    laneCounts.set(visibleLane, inLaneIndex + 1);
-    const radius = Math.max(18, Math.min(54, Math.sqrt(row.total / maxCount) * Math.min(54, laneWidth * 0.26)));
-    const x = laneIndex * laneWidth + laneWidth / 2 + ((inLaneIndex % 2) - 0.5) * Math.min(28, radius * 0.65);
-    const y = 92 + Math.floor(inLaneIndex / 2) * Math.max(62, radius * 1.45) + (index % 3) * 5;
-    return { ...row, lane: visibleLane, radius, x, y: Math.min(y, height - radius - 20) };
+    const column = index % columnCount;
+    const rowIndex = Math.floor(index / columnCount);
+    const radius = Math.max(20, Math.min(58, Math.sqrt(row.total / maxCount) * Math.min(58, xStep * 0.32)));
+    const x = column * xStep + xStep / 2;
+    const y = 72 + rowIndex * yStep;
+    return { ...row, radius, x, y: Math.min(y, height - radius - 20) };
   });
 
   return (
     <div className="chart-frame" ref={frameRef}>
       <svg className="bubble-svg" role="img" viewBox={`0 0 ${width} ${height}`}>
-        <title>Ticker overlap bubble chart</title>
-        {lanes.map((lane, index) => (
-          <g key={lane}>
-            <rect className="bubble-lane-bg" x={index * laneWidth + 8} y={48} width={Math.max(0, laneWidth - 16)} height={height - 70} rx={10} />
-            <text className="bubble-lane-label" textAnchor="middle" x={index * laneWidth + laneWidth / 2} y={28}>
-              {labels[lane]} ({nodes.filter((node) => node.lane === lane).length})
-            </text>
-          </g>
-        ))}
+        <title>Shared ticker overlap bubble chart</title>
+        <rect className="bubble-lane-bg" x={8} y={48} width={Math.max(0, width - 16)} height={height - 70} rx={10} />
+        <text className="bubble-lane-label" textAnchor="middle" x={width / 2} y={28}>
+          Shared tickers ({nodes.length})
+        </text>
         {nodes.map((node) => {
           const symbol = node.ticker.replace("$", "");
           const title = `${node.ticker} - ${node.authors.map((author) => `${authorNames[author.who]} ${author.count}x`).join(" | ")}`;

@@ -64,6 +64,23 @@ export type TickerOverlap = {
   color: string;
 };
 
+export type UniqueTickerMention = {
+  ticker: string;
+  who: AuthorKey;
+  count: number;
+  color: string;
+};
+
+export type AccountUniqueTickerGroup = {
+  who: AuthorKey;
+  tickers: UniqueTickerMention[];
+};
+
+export type TickerMentionGroups = {
+  shared: TickerOverlap[];
+  uniqueByAuthor: AccountUniqueTickerGroup[];
+};
+
 export type PortfolioHolding = {
   ticker: string;
   weight: number;

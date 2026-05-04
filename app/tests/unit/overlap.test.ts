@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTickerOverlap } from "../../app/lib/overlap";
+import { buildTickerMentionGroups, buildTickerOverlap } from "../../app/lib/overlap";
 import { authors, tweetsByAuthor } from "../../app/lib/static-data";
 
 const colorByKey = Object.fromEntries(authors.map((a) => [a.key, a.color]));
@@ -29,6 +29,28 @@ describe("buildTickerOverlap", () => {
     expect(byTicker.$MXL.authors).toEqual([
       { who: "a", count: 1 },
       { who: "b", count: 1 },
+    ]);
+  });
+
+  it("classifies shared tickers for the chart and unique tickers by account for the table", () => {
+    const groups = buildTickerMentionGroups(
+      {
+        alpha: [
+          { id: "1", text: "$AAOI $SIVE", created_at: "", likes: 0, retweets: 0, replies: 0, cashtags: ["$AAOI", "$SIVE"], url: "" },
+        ],
+        beta: [
+          { id: "2", text: "$AAOI $MXL", created_at: "", likes: 0, retweets: 0, replies: 0, cashtags: ["$AAOI", "$MXL"], url: "" },
+        ],
+        gamma: [],
+      },
+      { alpha: "#111", beta: "#222", gamma: "#333" },
+    );
+
+    expect(groups.shared.map((row) => row.ticker)).toEqual(["$AAOI"]);
+    expect(groups.uniqueByAuthor).toEqual([
+      { who: "alpha", tickers: [{ ticker: "$SIVE", who: "alpha", count: 1, color: "#111" }] },
+      { who: "beta", tickers: [{ ticker: "$MXL", who: "beta", count: 1, color: "#222" }] },
+      { who: "gamma", tickers: [] },
     ]);
   });
 });
