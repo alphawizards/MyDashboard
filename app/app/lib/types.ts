@@ -114,6 +114,24 @@ export type WatchlistPageSnapshot = {
   equities: EquitySnapshot;
   farside: BtcEtfFlowsSnapshot;
   predictionMarkets: PredictionCardsSnapshot;
+  };
+export type FarsideFlowRow = {
+  date: string;
+  values: Record<string, string>;
+};
+
+export type WatchlistDashboardData = {
+  refreshedAt: string;
+  watchlistRefreshedAt: string;
+  watchlistRefreshedAtLabel: string;
+  farsideRefreshedAt: string;
+  farsideRefreshedAtLabel: string;
+  watchlist: Stock[];
+  farsideFlows: FarsideFlowRow[];
+};
+
+export type WatchlistRefreshResponse = WatchlistDashboardData & {
+  ok: true;
 };
 
 export type TickerAuthorCount = {
