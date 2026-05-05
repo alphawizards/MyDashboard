@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const revalidatePath = vi.fn();
 const fetchAllTweetsWithDiagnostics = vi.fn();
 const isXConfigured = vi.fn();
+const refreshFarsideBtcFlows = vi.fn();
 
 vi.mock("next/cache", () => ({ revalidatePath }));
+vi.mock("@/app/lib/watchlist/farside", () => ({ refreshFarsideBtcFlows }));
 vi.mock("@/lib/x/server", () => ({
   fetchAllTweetsWithDiagnostics,
   isXConfigured,
@@ -14,12 +16,31 @@ describe("/api/refresh/all", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
+    revalidatePath.mockReset();
+    fetchAllTweetsWithDiagnostics.mockReset();
+    isXConfigured.mockReset();
+    refreshFarsideBtcFlows.mockReset();
     delete process.env.REFRESH_SHARED_SECRET;
+    delete process.env.DATABASE_URL;
+    delete process.env.DATABASE_PUBLIC_URL;
     isXConfigured.mockReturnValue(true);
+    refreshFarsideBtcFlows.mockResolvedValue({
+      rows: [],
+      sourceUrl: "https://farside.co.uk/bitcoin-etf-flow-all-data/",
+      status: {
+        provider: "farside",
+        status: "ok",
+        message: "Loaded 10 Farside rows.",
+        updatedAt: "2026-05-05T00:00:00.000Z",
+      },
+    });
   });
 
   afterEach(() => {
     delete process.env.REFRESH_SHARED_SECRET;
+    delete process.env.DATABASE_URL;
+    delete process.env.DATABASE_PUBLIC_URL;
+    vi.restoreAllMocks();
   });
 
   it("reports non-zero fetched counts after a live refresh", async () => {
@@ -51,6 +72,9 @@ describe("/api/refresh/all", () => {
     });
     expect(body.diagnostics.a.handle).toBe("aleabitoreddit");
     expect(revalidatePath).toHaveBeenCalledWith("/feed");
+    expect(revalidatePath).toHaveBeenCalledWith("/watchlist");
+    expect(body.providers.farside.status).toBe("ok");
+    expect(body.requestId).toBeTruthy();
   });
 
   it("keeps diagnostics visible when X returns zero fetched posts", async () => {
@@ -92,5 +116,120 @@ describe("/api/refresh/all", () => {
       error: "Invalid Request",
     });
     expect(revalidatePath).toHaveBeenCalledWith("/feed");
+    expect(revalidatePath).toHaveBeenCalledWith("/watchlist");
+  });
+
+  it("returns 401 without logging secrets when the refresh secret is wrong", async () => {
+    process.env.REFRESH_SHARED_SECRET = "super-secret-value";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", {
+      method: "POST",
+      headers: {
+        "x-refresh-secret": "wrong-secret",
+        "x-request-id": "req-auth-fail",
+      },
+    }));
+    const body = await response.json();
+    const logs = [...warn.mock.calls, ...info.mock.calls].flat().join("\n");
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ ok: false, error: "unauthorized", requestId: "req-auth-fail" });
+    expect(logs).not.toContain("super-secret-value");
+    expect(logs).not.toContain("wrong-secret");
+    expect(refreshFarsideBtcFlows).not.toHaveBeenCalled();
+  });
+
+  it("returns controlled 500 JSON when Farside throws", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    refreshFarsideBtcFlows.mockRejectedValue(new Error("Farside exploded"));
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", {
+      method: "POST",
+      headers: { "x-request-id": "req-farside-fail" },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ ok: false, error: "refresh_failed", requestId: "req-farside-fail" });
+    expect(revalidatePath).not.toHaveBeenCalled();
+  });
+
+  it("keeps X refresh failures observable while returning the existing fallback success", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    fetchAllTweetsWithDiagnostics.mockRejectedValue(new Error("X API unavailable"));
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", {
+      method: "POST",
+      headers: { "x-request-id": "req-x-fail" },
+    }));
+    const body = await response.json();
+    const warnLogs = warn.mock.calls.flat().join("\n");
+
+    expect(response.status).toBe(200);
+    expect(body.mode).toBe("live-fallback");
+    expect(warnLogs).toContain("refresh.x.failure");
+    expect(warnLogs).toContain("X API unavailable");
+    expect(revalidatePath).toHaveBeenCalledWith("/feed");
+    expect(revalidatePath).toHaveBeenCalledWith("/watchlist");
+  });
+
+  it("returns controlled 500 JSON when revalidation throws", async () => {
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    fetchAllTweetsWithDiagnostics.mockResolvedValue({
+      tweetsByAuthor: { s: [] },
+      diagnostics: {
+        s: { handle: "michaelsikand", userLookup: { ok: true, status: 200 } },
+      },
+    });
+    revalidatePath.mockImplementation(() => {
+      throw new Error("revalidate failed");
+    });
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", {
+      method: "POST",
+      headers: { "x-request-id": "req-revalidate-fail" },
+    }));
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ ok: false, error: "refresh_failed", requestId: "req-revalidate-fail" });
+  });
+
+  it("logs malformed database URLs without failing the refresh route", async () => {
+    process.env.DATABASE_URL = "http://postgres.internal:5432/railway";
+    process.env.DATABASE_PUBLIC_URL = "postgresql://user:pass@roundhouse.proxy.rlwy.net:PORT/railway?sslmode=require";
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(console, "info").mockImplementation(() => undefined);
+    fetchAllTweetsWithDiagnostics.mockResolvedValue({
+      tweetsByAuthor: { s: [] },
+      diagnostics: {
+        s: { handle: "michaelsikand", userLookup: { ok: true, status: 200 } },
+      },
+    });
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", {
+      method: "POST",
+      headers: { "x-request-id": "req-db-warning" },
+    }));
+    const body = await response.json();
+    const warnLogs = warn.mock.calls.flat().join("\n");
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(warnLogs).toContain("db.config.warning");
+    expect(warnLogs).not.toContain("user:pass");
+    expect(warnLogs).not.toContain("sslmode=require");
   });
 });
