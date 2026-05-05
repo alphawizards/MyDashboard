@@ -4,6 +4,26 @@ import { getWatchlistSnapshot } from "@/app/lib/watchlist/snapshot";
 
 export const dynamic = "force-dynamic";
 
+function fmtCurrency(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    style: "currency",
+  }).format(value);
+}
+
+function fmtCompact(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 1,
+    notation: "compact",
+  }).format(value);
+}
+
+function pct(value: number | null) {
+  if (value === null) return "n/a";
+  return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
 function fmtAest(value: string | null) {
   if (!value) return "Not available";
   return new Intl.DateTimeFormat("en-AU", {
