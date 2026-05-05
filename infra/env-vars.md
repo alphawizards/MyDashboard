@@ -13,6 +13,18 @@ All secrets live in Railway env vars. Never committed.
 | `HEARTBEAT_URL` | worker | Railway | Better Stack / Cronitor ping URL |
 | `AUTH_EMAIL_ALLOWLIST` | middleware + login action | Railway | Comma-separated emails. Falls back to hardcoded default if unset. |
 | `NEXT_PUBLIC_SITE_URL` | login action (magic-link redirect) | Railway + `.env.local` | e.g. `https://dashboard.example.com`. Must match Supabase redirect URLs. |
+| `DATABASE_URL` | future/server DB code + manual ops | Railway + `.env.local` when needed | Must be `postgres://` or `postgresql://`. Inside Railway prefer the private Postgres URL, not an HTTP endpoint. |
+| `DATABASE_PUBLIC_URL` | local/admin DB access only | `.env.local` or Railway when needed | Public Railway proxy URL. Do not use as an HTTP health-check target. |
+
+The active app currently does not install a Postgres runtime client. Database
+variables are audited and sanitized by the refresh endpoint so bad protocols are
+visible in logs, but no database connection is opened by `/api/refresh/all`.
+
+## Railway health checks
+
+Configure Railway and external monitors to check the web app, ideally
+`/api/health`. Never point an HTTP monitor at the Postgres host/port; that is the
+most likely cause of repeated Postgres `invalid length of startup packet` logs.
 
 ## Local dev
 Copy `app/.env.example` → `app/.env.local`. Never commit `.env.local`.

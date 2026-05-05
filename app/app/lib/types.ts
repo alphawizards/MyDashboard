@@ -51,6 +51,71 @@ export type Stock = {
   priority: "low" | "medium" | "high" | string;
 };
 
+export type ProviderStatusKind = "ok" | "stale" | "failed" | "link_only";
+
+export type ProviderStatus = {
+  provider: "yfinance" | "farside" | "predictionMarkets";
+  status: ProviderStatusKind;
+  message: string;
+  updatedAt: string | null;
+  error?: string;
+};
+
+export type EquitySnapshot = {
+  rows: Stock[];
+  status: ProviderStatus;
+};
+
+export const BTC_ETF_FLOW_COLUMNS = [
+  "IBIT",
+  "FBTC",
+  "BITB",
+  "ARKB",
+  "BTCO",
+  "EZBC",
+  "BRRR",
+  "HODL",
+  "BTCW",
+  "MSBT",
+  "GBTC",
+  "BTC",
+  "Total",
+] as const;
+
+export type BtcEtfFlowColumn = (typeof BTC_ETF_FLOW_COLUMNS)[number];
+
+export type BtcEtfFlowRow = {
+  date: string;
+  dateLabel: string;
+  values: Record<BtcEtfFlowColumn, number | null>;
+};
+
+export type BtcEtfFlowsSnapshot = {
+  rows: BtcEtfFlowRow[];
+  sourceUrl: string;
+  status: ProviderStatus;
+};
+
+export type PredictionCard = {
+  key: string;
+  title: string;
+  provider: "Polymarket";
+  marketUrl: string;
+  status: "link_only" | "ok" | "stale" | "failed";
+  description: string;
+};
+
+export type PredictionCardsSnapshot = {
+  cards: PredictionCard[];
+  status: ProviderStatus;
+};
+
+export type WatchlistPageSnapshot = {
+  equities: EquitySnapshot;
+  farside: BtcEtfFlowsSnapshot;
+  predictionMarkets: PredictionCardsSnapshot;
+};
+
 export type TickerAuthorCount = {
   who: AuthorKey;
   count: number;

@@ -8,7 +8,14 @@ Two services live in one Railway project.
 - Root Directory: `app`
 - Build Command: `npm ci && npm run build`
 - Start Command: `npm start`
+- Health check path: `/api/health`
 - Public domain: proxied behind Cloudflare (`dashboard.<yourdomain>`)
+
+Health checks and uptime monitors must target the web app HTTP endpoint, for example
+`https://dashboard.<yourdomain>/api/health`. Do not point Railway health checks,
+Better Stack, Cronitor, UptimeRobot, Cloudflare monitors, or curl probes at the
+Postgres service host or port `5432`; HTTP probes against the Postgres TCP port
+produce `invalid length of startup packet` log spam.
 
 ## Service 2: `dashboard-cron`
 
@@ -28,6 +35,20 @@ Do not use `node dist/workers/refresh.js` unless a separate worker TypeScript bu
 ## Shared Env Vars
 
 Configure env vars at the Railway **project** level so both services see the same values. See [env-vars.md](./env-vars.md).
+
+If a Railway Postgres service is attached, verify every database variable points
+at the intended Postgres service:
+
+- `DATABASE_URL`: use the private `postgresql://...railway.internal:5432/...`
+  URL for app-to-database traffic inside Railway, but only for code that actually
+  uses Postgres.
+- `DATABASE_PUBLIC_URL`: use only for local/admin tools that need the public
+  proxy, not as a web app health-check target.
+- Any pooled/direct variants must still use `postgres://` or `postgresql://`,
+  the correct service, and the correct Railway-provided port.
+
+This codebase currently hardens and audits database URL configuration without
+opening a Postgres connection from the refresh route.
 
 ## Manual Cron Trigger
 

@@ -840,6 +840,73 @@ a.cashtag-tag:focus-visible,
   line-height: 1.45;
 }
 
+.market-card-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.external-market-link {
+  display: inline-flex;
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.external-market-link:hover,
+.external-market-link:focus-visible {
+  border-color: #4fc3f7;
+}
+
+.provider-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.provider-status strong,
+.provider-status span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.provider-status strong {
+  color: #fff;
+}
+
+.provider-status-ok span {
+  color: #10b981;
+}
+
+.provider-status-stale span,
+.provider-status-link_only span {
+  color: #f59e0b;
+}
+
+.provider-status-failed span {
+  color: #ef4444;
+}
+
+.provider-status small {
+  color: var(--muted);
+}
+
 .farside-prototype {
   max-height: 360px;
   overflow: auto;
@@ -866,6 +933,16 @@ a.cashtag-tag:focus-visible,
 .farside-prototype th:first-child,
 .farside-prototype td:first-child {
   text-align: left;
+}
+
+.farside-flow-table .total {
+  font-weight: 900;
+}
+
+.section-empty {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .portfolio-layout {

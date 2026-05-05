@@ -127,12 +127,26 @@ railway up
 
 ## Manual refresh via deployed API
 
+Canonical production refresh endpoint: `POST /api/refresh/all`. Do not use
+`/api/watchlist/refresh` unless a future migration explicitly adds that route.
+
 ```bash
 curl -X POST https://dashboard.<apex>/api/refresh/all \
   -H "x-refresh-secret: $REFRESH_SHARED_SECRET"
 ```
 
 Expected: `{"ok":true}` — then check Supabase `refresh_runs` for the new row.
+
+---
+
+## Health check
+
+```bash
+curl https://dashboard.<apex>/api/health
+```
+
+Railway and external monitors should use the web app health endpoint, never the
+Postgres host or port `5432`.
 
 ---
 
