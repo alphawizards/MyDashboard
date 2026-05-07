@@ -5,6 +5,7 @@ import { logDatabaseConfigOnce } from "@/lib/db-config";
 import { createRequestId, logger, serializeError } from "@/lib/logger";
 import { fetchAllTweetsWithDiagnostics, isXConfigured } from "@/lib/x/server";
 import type { XRefreshDiagnostics } from "@/lib/x/server";
+import { buildTickerMentionCounts, refreshTickerFacts } from "@/lib/stocks/account-tracker";
 
 export async function POST(request: Request) {
   const requestId = createRequestId(request);
@@ -60,6 +61,13 @@ export async function POST(request: Request) {
         fetched = Object.fromEntries(
           Object.entries(tweetsByAuthor).map(([key, tweets]) => [key, tweets.length]),
         );
+        const serenityTweets = tweetsByAuthor.a ?? [];
+        const serenityTickers = Object.keys(buildTickerMentionCounts(serenityTweets));
+        if (serenityTickers.length) {
+          logger.info("refresh.yahoo.serenity.start", { requestId, tickers: serenityTickers.length });
+          await refreshTickerFacts(serenityTickers);
+          logger.info("refresh.yahoo.serenity.success", { requestId, tickers: serenityTickers.length });
+        }
         mode = "live";
         message = "Feed cache revalidated after live X fetch.";
         logger.info("refresh.x.success", { requestId, fetched });
@@ -72,8 +80,9 @@ export async function POST(request: Request) {
       logger.info("refresh.x.skipped", { requestId, reason: "not_configured" });
     }
 
-    logger.info("refresh.revalidate.start", { requestId, paths: ["/feed", "/watchlist"] });
+    logger.info("refresh.revalidate.start", { requestId, paths: ["/feed", "/feed/accounts/serenity", "/watchlist"] });
     revalidatePath("/feed");
+    revalidatePath("/feed/accounts/serenity");
     revalidatePath("/watchlist");
     logger.info("refresh.revalidate.success", { requestId });
 

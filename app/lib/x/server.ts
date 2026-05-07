@@ -1,6 +1,12 @@
 import 'server-only';
 import { getTrackedAuthors } from '@/lib/accounts/server';
 import type { Tweet } from '@/app/lib/types';
+import {
+  getCachedAccountRows,
+  upsertTrackedAccounts,
+  upsertTweetsForAuthor,
+  type CacheableTweet,
+} from '@/lib/x/cache';
 
 type XEndpointDiagnostic = {
   ok: boolean;
@@ -69,8 +75,16 @@ function extractCashtags(text: string, entities?: { cashtags?: { tag: string }[]
 }
 
 async function resolveUserIdWithDiagnostic(
-  handle: string
+  handle: string,
+  cachedUserId?: string | null,
 ): Promise<{ userId: string | null; diagnostic: XEndpointDiagnostic }> {
+  if (cachedUserId) {
+    return {
+      userId: cachedUserId,
+      diagnostic: { ok: true, status: null },
+    };
+  }
+
   try {
     const res = await fetch(`${X_API}/users/by/username/${handle}?user.fields=id`, {
       headers: authHeaders(),
@@ -106,18 +120,22 @@ async function resolveUserIdWithDiagnostic(
 
 export async function fetchTweetsForAuthorWithDiagnostic(
   key: string,
-  handle: string
-): Promise<{ tweets: Tweet[]; diagnostic: XAuthorRefreshDiagnostic }> {
-  const { userId, diagnostic: userLookup } = await resolveUserIdWithDiagnostic(handle);
+  handle: string,
+  options: { cachedUserId?: string | null; sinceId?: string | null } = {},
+): Promise<{ tweets: CacheableTweet[]; diagnostic: XAuthorRefreshDiagnostic; userId: string | null }> {
+  const { userId, diagnostic: userLookup } = await resolveUserIdWithDiagnostic(handle, options.cachedUserId);
   const diagnostic: XAuthorRefreshDiagnostic = { handle, userLookup };
 
-  if (!userId) return { tweets: [], diagnostic };
+  if (!userId) return { tweets: [], diagnostic, userId };
 
   const params = new URLSearchParams({
     max_results: String(MAX_RESULTS),
     'tweet.fields': TWEET_FIELDS,
     exclude: 'retweets,replies',
   });
+  if (options.sinceId) {
+    params.set('since_id', options.sinceId);
+  }
 
   let res: Response;
   try {
@@ -131,12 +149,12 @@ export async function fetchTweetsForAuthorWithDiagnostic(
       status: null,
       error: err instanceof Error ? err.message : "Unknown tweets fetch error",
     };
-    return { tweets: [], diagnostic };
+    return { tweets: [], diagnostic, userId };
   }
 
   if (!res.ok) {
     diagnostic.tweets = { ok: false, status: res.status, error: await responseError(res) };
-    return { tweets: [], diagnostic };
+    return { tweets: [], diagnostic, userId };
   }
 
   const json = await res.json();
@@ -154,6 +172,7 @@ export async function fetchTweetsForAuthorWithDiagnostic(
     id: t.id,
     text: t.text,
     created_at: formatDate(t.created_at),
+    postedAtIso: t.created_at,
     likes: t.public_metrics.like_count,
     retweets: t.public_metrics.retweet_count,
     replies: t.public_metrics.reply_count,
@@ -161,7 +180,7 @@ export async function fetchTweetsForAuthorWithDiagnostic(
     url: `https://x.com/${handle}/status/${t.id}`,
   }));
 
-  return { tweets, diagnostic };
+  return { tweets, diagnostic, userId };
 }
 
 export async function verifyXUserExists(handle: string): Promise<{ exists: boolean; diagnostic: XEndpointDiagnostic }> {
@@ -187,13 +206,26 @@ export async function fetchAllTweetsWithDiagnostics(): Promise<{
   diagnostics: XRefreshDiagnostics;
 }> {
   const authors = getTrackedAuthors();
+  await upsertTrackedAccounts(authors);
+  const cachedAccountRows = await getCachedAccountRows(authors.map((author) => author.key));
   const authorHandles = Object.fromEntries(
     authors.map((author) => [author.key, author.handle])
   ) as Record<string, string>;
 
   const entries = await Promise.all(
     Object.entries(authorHandles).map(
-      async ([key, handle]) => [key, await fetchTweetsForAuthorWithDiagnostic(key, handle)] as const
+      async ([key, handle]) => {
+        const account = cachedAccountRows[key];
+        const result = await fetchTweetsForAuthorWithDiagnostic(key, handle, {
+          cachedUserId: account?.author_id,
+          sinceId: account?.last_tweet_id,
+        });
+        const author = authors.find((item) => item.key === key);
+        if (author && result.userId) {
+          await upsertTweetsForAuthor(author, result.userId, result.tweets);
+        }
+        return [key, result] as const;
+      }
     )
   );
 

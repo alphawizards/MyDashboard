@@ -4,7 +4,8 @@ import { buildAccountCompleteTweetMap, initialsFromName } from "@/app/lib/accoun
 import { buildTickerCounts, buildTickerOverlap } from "@/app/lib/overlap";
 import { tweetsByAuthor as staticTweetsByAuthor } from "@/app/lib/static-data";
 import { getAuthorBySlug, getTrackedAuthors } from "@/lib/accounts/server";
-import { fetchAllTweets, isXConfigured } from "@/lib/x/server";
+import { getCachedTweetsByAuthor } from "@/lib/x/cache";
+import { getAccountTickerPerformanceRows, type AccountTickerPerformanceRow } from "@/lib/stocks/account-tracker";
 
 type AccountPageProps = {
   params: Promise<{ slug: string }>;
@@ -20,22 +21,17 @@ export default async function AccountPage({ params }: AccountPageProps) {
 
   const authors = getTrackedAuthors();
   let tweetsByAuthor = buildAccountCompleteTweetMap(authors, staticTweetsByAuthor);
-  let dataSource: "live" | "static" = "static";
+  let dataSource: "cached" | "static" = "static";
 
-  if (isXConfigured()) {
-    try {
-      const live = await fetchAllTweets();
-      const totalLive = Object.values(live).reduce((sum, tweets) => sum + tweets.length, 0);
-      if (totalLive > 0) {
-        tweetsByAuthor = buildAccountCompleteTweetMap(authors, live);
-        dataSource = "live";
-      }
-    } catch {
-      // Keep static fallback.
-    }
+  const cached = await getCachedTweetsByAuthor(authors);
+  const totalCached = cached ? Object.values(cached).reduce((sum, tweets) => sum + tweets.length, 0) : 0;
+  if (cached && totalCached > 0) {
+    tweetsByAuthor = buildAccountCompleteTweetMap(authors, cached);
+    dataSource = "cached";
   }
 
   const accountTweets = tweetsByAuthor[author.key] ?? [];
+  const tickerPerformanceRows = await getAccountTickerPerformanceRows(accountTweets);
   const tickerCounts = buildTickerCounts(accountTweets);
   const colorByKey = Object.fromEntries(authors.map((item) => [item.key, item.color]));
   const overlap = buildTickerOverlap(tweetsByAuthor, colorByKey);
@@ -51,7 +47,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
           <p className="eyebrow">X account</p>
           <h1>{author.name}</h1>
           <p className="subtitle">
-            @{author.handle} · {dataSource === "live" ? "Live X data" : "Static fallback"} · {accountTweets.length} tweets
+            @{author.handle} - {dataSource === "cached" ? "Cached X data" : "Static fallback"} - {accountTweets.length} tweets
           </p>
         </div>
         <nav className="nav-actions" aria-label="Dashboard navigation">
@@ -97,6 +93,8 @@ export default async function AccountPage({ params }: AccountPageProps) {
           </span>
         </div>
       </section>
+
+      <TickerPerformanceTable rows={tickerPerformanceRows} accountName={author.name} />
 
       <section className="account-layout">
         <div className="account-panel">
@@ -175,4 +173,56 @@ export default async function AccountPage({ params }: AccountPageProps) {
       </section>
     </main>
   );
+}
+
+function TickerPerformanceTable({
+  rows,
+  accountName,
+}: {
+  rows: readonly AccountTickerPerformanceRow[];
+  accountName: string;
+}) {
+  return (
+    <section className="ticker-performance-panel" aria-label={`${accountName} stock pick tracker`}>
+      <div className="ticker-performance-title">
+        <h2>Stock Pick Tracker</h2>
+        <span>{rows.length} tickers</span>
+      </div>
+      {rows.length ? (
+        <div className="ticker-performance-table" role="table">
+          <div className="ticker-performance-row ticker-performance-head" role="row">
+            <span>Ticker</span>
+            <span>Company</span>
+            <span>Theme</span>
+            <span>1M %</span>
+            <span>12M %</span>
+            <span>Mentions</span>
+          </div>
+          {rows.map((row) => (
+            <div className="ticker-performance-row" role="row" key={row.ticker}>
+              <strong>{row.ticker}</strong>
+              <span>{row.company}</span>
+              <span>{row.theme}</span>
+              <PerformanceCell value={row.perf1M} />
+              <PerformanceCell value={row.perf12M} />
+              <span>{row.mentions}</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="empty-copy">No ticker performance rows available yet.</p>
+      )}
+    </section>
+  );
+}
+
+function PerformanceCell({ value }: { value: number | null }) {
+  if (value === null) {
+    return <span className="zero">-</span>;
+  }
+
+  const className = value > 0 ? "pos" : value < 0 ? "neg" : "zero";
+  const sign = value > 0 ? "+" : "";
+
+  return <span className={className}>{sign}{value.toFixed(1)}%</span>;
 }
