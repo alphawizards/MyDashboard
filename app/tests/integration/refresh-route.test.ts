@@ -5,6 +5,7 @@ const fetchAllTweetsWithDiagnostics = vi.fn();
 const isXConfigured = vi.fn();
 const refreshFarsideBtcFlows = vi.fn();
 
+vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/app/lib/watchlist/farside", () => ({ refreshFarsideBtcFlows }));
 vi.mock("@/lib/x/server", () => ({

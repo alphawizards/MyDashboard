@@ -4,7 +4,12 @@ import { getWatchlistSnapshot } from "@/app/lib/watchlist/snapshot";
 
 export const dynamic = "force-dynamic";
 
-function fmtCurrency(value: number) {
+function isFiniteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function fmtCurrency(value: number | null | undefined) {
+  if (!isFiniteNumber(value)) return "n/a";
   return new Intl.NumberFormat("en-US", {
     currency: "USD",
     maximumFractionDigits: 2,
@@ -12,15 +17,16 @@ function fmtCurrency(value: number) {
   }).format(value);
 }
 
-function fmtCompact(value: number) {
+function fmtCompact(value: number | null | undefined) {
+  if (!isFiniteNumber(value)) return "n/a";
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: 1,
     notation: "compact",
   }).format(value);
 }
 
-function pct(value: number | null) {
-  if (value === null) return "n/a";
+function pct(value: number | null | undefined) {
+  if (!isFiniteNumber(value)) return "n/a";
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
