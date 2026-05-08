@@ -1,13 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const revalidatePath = vi.fn();
-const fetchAllTweetsWithDiagnostics = vi.fn();
-const isXConfigured = vi.fn();
-const refreshFarsideBtcFlows = vi.fn();
+const {
+  fetchAllTweetsWithDiagnostics,
+  isXConfigured,
+  refreshFarsideBtcFlows,
+  refreshTickerFacts,
+  revalidatePath,
+} = vi.hoisted(() => ({
+  fetchAllTweetsWithDiagnostics: vi.fn(),
+  isXConfigured: vi.fn(),
+  refreshFarsideBtcFlows: vi.fn(),
+  refreshTickerFacts: vi.fn(),
+  revalidatePath: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath }));
 vi.mock("@/app/lib/watchlist/farside", () => ({ refreshFarsideBtcFlows }));
+vi.mock("@/lib/stocks/account-tracker", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/stocks/account-tracker")>();
+
+  return {
+    ...actual,
+    refreshTickerFacts,
+  };
+});
 vi.mock("@/lib/x/server", () => ({
   fetchAllTweetsWithDiagnostics,
   isXConfigured,
@@ -21,6 +38,7 @@ describe("/api/refresh/all", () => {
     fetchAllTweetsWithDiagnostics.mockReset();
     isXConfigured.mockReset();
     refreshFarsideBtcFlows.mockReset();
+    refreshTickerFacts.mockReset();
     delete process.env.REFRESH_SHARED_SECRET;
     delete process.env.DATABASE_URL;
     delete process.env.DATABASE_PUBLIC_URL;
@@ -76,6 +94,50 @@ describe("/api/refresh/all", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/watchlist");
     expect(body.providers.farside.status).toBe("ok");
     expect(body.requestId).toBeTruthy();
+  });
+
+  it("refreshes Yahoo facts from live Serenity cashtags", async () => {
+    fetchAllTweetsWithDiagnostics.mockResolvedValue({
+      tweetsByAuthor: {
+        a: [
+          {
+            id: "a1",
+            text: "$SIVE $AAOI",
+            created_at: "2026-05-08T00:00:00.000Z",
+            likes: 0,
+            retweets: 0,
+            replies: 0,
+            cashtags: ["$SIVE", "$AAOI", "$AAOI"],
+            url: "https://x.com/aleabitoreddit/status/a1",
+          },
+        ],
+      },
+      diagnostics: {
+        a: { handle: "aleabitoreddit", userLookup: { ok: true, status: 200 }, tweets: { ok: true, status: 200, returned: 1 } },
+      },
+    });
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", { method: "POST" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(refreshTickerFacts).toHaveBeenCalledWith(expect.arrayContaining(["SIVE", "AAOI"]));
+    expect(body.yahoo).toEqual({ source: "live", tickers: 2 });
+  });
+
+  it("refreshes Yahoo facts from static Serenity tickers when X is not configured", async () => {
+    isXConfigured.mockReturnValue(false);
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", { method: "POST" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(fetchAllTweetsWithDiagnostics).not.toHaveBeenCalled();
+    expect(refreshTickerFacts).toHaveBeenCalledWith(expect.arrayContaining(["SIVE", "AAOI"]));
+    expect(body.yahoo.source).toBe("static");
+    expect(body.yahoo.tickers).toBeGreaterThan(0);
   });
 
   it("keeps diagnostics visible when X returns zero fetched posts", async () => {

@@ -1,11 +1,48 @@
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
+import { tweetsByAuthor as staticTweetsByAuthor } from "@/app/lib/static-data";
+import type { Tweet } from "@/app/lib/types";
 import { refreshFarsideBtcFlows } from "@/app/lib/watchlist/farside";
 import { logDatabaseConfigOnce } from "@/lib/db-config";
 import { createRequestId, logger, serializeError } from "@/lib/logger";
 import { fetchAllTweetsWithDiagnostics, isXConfigured } from "@/lib/x/server";
 import type { XRefreshDiagnostics } from "@/lib/x/server";
 import { buildTickerMentionCounts, refreshTickerFacts } from "@/lib/stocks/account-tracker";
+
+const SERENITY_AUTHOR_KEY = "a";
+
+function getSerenityYahooRefreshTickers(tweetsByAuthor?: Record<string, Tweet[]>): {
+  source: "live" | "static";
+  tickers: string[];
+} {
+  const liveSerenityTweets = tweetsByAuthor?.[SERENITY_AUTHOR_KEY] ?? [];
+  const sourceTweets = liveSerenityTweets.length
+    ? liveSerenityTweets
+    : staticTweetsByAuthor[SERENITY_AUTHOR_KEY];
+
+  return {
+    source: liveSerenityTweets.length ? "live" : "static",
+    tickers: Object.keys(buildTickerMentionCounts(sourceTweets)),
+  };
+}
+
+async function refreshSerenityYahooFacts(
+  requestId: string,
+  tweetsByAuthor?: Record<string, Tweet[]>,
+): Promise<{ source: "live" | "static"; tickers: number }> {
+  const { source, tickers } = getSerenityYahooRefreshTickers(tweetsByAuthor);
+
+  if (!tickers.length) {
+    logger.info("refresh.yahoo.serenity.skipped", { requestId, source, reason: "no_tickers" });
+    return { source, tickers: 0 };
+  }
+
+  logger.info("refresh.yahoo.serenity.start", { requestId, source, tickers: tickers.length });
+  await refreshTickerFacts(tickers);
+  logger.info("refresh.yahoo.serenity.success", { requestId, source, tickers: tickers.length });
+
+  return { source, tickers: tickers.length };
+}
 
 export async function POST(request: Request) {
   const requestId = createRequestId(request);
@@ -44,6 +81,7 @@ export async function POST(request: Request) {
     let message = "X_BEARER_TOKEN is not configured; static fallback data is active.";
     let fetched: Record<string, number> | undefined;
     let diagnostics: XRefreshDiagnostics | undefined;
+    let yahoo: { source: "live" | "static"; tickers: number } | undefined;
 
     logger.info("refresh.farside.start", { requestId });
     const farside = await refreshFarsideBtcFlows();
@@ -61,13 +99,7 @@ export async function POST(request: Request) {
         fetched = Object.fromEntries(
           Object.entries(tweetsByAuthor).map(([key, tweets]) => [key, tweets.length]),
         );
-        const serenityTweets = tweetsByAuthor.a ?? [];
-        const serenityTickers = Object.keys(buildTickerMentionCounts(serenityTweets));
-        if (serenityTickers.length) {
-          logger.info("refresh.yahoo.serenity.start", { requestId, tickers: serenityTickers.length });
-          await refreshTickerFacts(serenityTickers);
-          logger.info("refresh.yahoo.serenity.success", { requestId, tickers: serenityTickers.length });
-        }
+        yahoo = await refreshSerenityYahooFacts(requestId, tweetsByAuthor);
         mode = "live";
         message = "Feed cache revalidated after live X fetch.";
         logger.info("refresh.x.success", { requestId, fetched });
@@ -75,9 +107,11 @@ export async function POST(request: Request) {
         mode = "live-fallback";
         message = err instanceof Error ? err.message : "Live X refresh failed; feed cache was still revalidated.";
         logger.warn("refresh.x.failure", { requestId, error: serializeError(err) });
+        yahoo = await refreshSerenityYahooFacts(requestId);
       }
     } else {
       logger.info("refresh.x.skipped", { requestId, reason: "not_configured" });
+      yahoo = await refreshSerenityYahooFacts(requestId);
     }
 
     logger.info("refresh.revalidate.start", { requestId, paths: ["/feed", "/feed/accounts/serenity", "/watchlist"] });
@@ -99,6 +133,7 @@ export async function POST(request: Request) {
       providers: {
         farside: farside.status,
       },
+      ...(yahoo ? { yahoo } : {}),
       ...(fetched ? { fetched } : {}),
       ...(diagnostics ? { diagnostics } : {}),
     });
