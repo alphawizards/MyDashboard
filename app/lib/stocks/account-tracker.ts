@@ -90,6 +90,22 @@ const YAHOO_SYMBOL_ALIASES: Record<string, readonly string[]> = {
   SOI: ["SOI.PA"],
 };
 
+const SEEDED_TICKER_FACTS: Record<string, TickerFact> = {
+  AAOI: seededFact("AAOI", "Applied Optoelectronics, Inc.", "Technology", "Communication Equipment"),
+  AEHR: seededFact("AEHR", "Aehr Test Systems, Inc.", "Technology", "Semiconductor Equipment & Materials"),
+  AMSC: seededFact("AMSC", "American Superconductor Corporation", "Industrials", "Specialty Industrial Machinery"),
+  AAPL: seededFact("AAPL", "Apple Inc.", "Technology", "Consumer Electronics"),
+  AXTI: seededFact("AXTI", "AXT, Inc.", "Technology", "Semiconductor Equipment & Materials"),
+  "HPS.A": seededFact("HPS.A", "Hammond Power Solutions Inc.", "Industrials", "Electrical Equipment & Parts"),
+  IQE: seededFact("IQE", "IQE plc", "Technology", "Semiconductor Equipment & Materials"),
+  LITE: seededFact("LITE", "Lumentum Holdings Inc.", "Technology", "Communication Equipment"),
+  MXL: seededFact("MXL", "MaxLinear, Inc.", "Technology", "Semiconductors"),
+  PLPC: seededFact("PLPC", "Preformed Line Products Company", "Industrials", "Electrical Equipment & Parts"),
+  SIVE: seededFact("SIVE", "Sivers Semiconductors AB (publ)", "Technology", "Semiconductors"),
+  SNDK: seededFact("SNDK", "Sandisk Corporation", "Technology", "Computer Hardware"),
+  SOI: seededFact("SOI", "Soitec SA", "Technology", "Semiconductor Equipment & Materials"),
+};
+
 const PROFILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PERFORMANCE_TTL_MS = 24 * 60 * 60 * 1000;
 
@@ -123,6 +139,25 @@ function toNumber(value: string | number | null): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function seededFact(
+  ticker: string,
+  company: string,
+  sector: string,
+  industry: string,
+): TickerFact {
+  return {
+    ticker,
+    company,
+    sector,
+    industry,
+    theme: industry || sector || "Unknown",
+    perf1M: null,
+    perf12M: null,
+    profileFetchedAt: null,
+    performanceFetchedAt: null,
+  };
 }
 
 function staticFact(stock: Stock): TickerFact {
@@ -178,6 +213,24 @@ export function shouldRefreshTickerFact(fact: TickerFact | undefined, nowMs = Da
   const performanceStale = !isFresh(fact.performanceFetchedAt, PERFORMANCE_TTL_MS, nowMs);
 
   return profileIncomplete || performanceIncomplete || profileStale || performanceStale;
+}
+
+function mergeTickerFactFallbacks(
+  cached: TickerFact | undefined,
+  fallback: TickerFact | undefined,
+): TickerFact | undefined {
+  if (!cached) return fallback;
+  if (!fallback) return cached;
+
+  return {
+    ...cached,
+    company: cached.company === "Unknown" ? fallback.company : cached.company,
+    sector: cached.sector ?? fallback.sector,
+    industry: cached.industry ?? fallback.industry,
+    theme: cached.theme === "Unknown" ? fallback.theme : cached.theme,
+    perf1M: cached.perf1M ?? fallback.perf1M,
+    perf12M: cached.perf12M ?? fallback.perf12M,
+  };
 }
 
 export function buildTickerMentionCounts(tweets: readonly Tweet[]): Record<string, number> {
@@ -237,6 +290,7 @@ export async function getCachedTickerFacts(tickers: readonly string[]): Promise<
   const staticFacts = Object.fromEntries(
     stocks.map((stock) => [stock.ticker, staticFact(stock)]),
   ) as Record<string, TickerFact>;
+  const fallbackFacts = { ...SEEDED_TICKER_FACTS, ...staticFacts };
 
   if (!normalized.length) return {};
 
@@ -278,11 +332,14 @@ export async function getCachedTickerFacts(tickers: readonly string[]): Promise<
     ) as Record<string, TickerFact>;
 
     return Object.fromEntries(
-      normalized.map((ticker) => [ticker, cached[ticker] ?? staticFacts[ticker] ?? unknownFact(ticker)]),
+      normalized.map((ticker) => [
+        ticker,
+        mergeTickerFactFallbacks(cached[ticker], fallbackFacts[ticker]) ?? unknownFact(ticker),
+      ]),
     );
   } catch {
     return Object.fromEntries(
-      normalized.map((ticker) => [ticker, staticFacts[ticker] ?? unknownFact(ticker)]),
+      normalized.map((ticker) => [ticker, fallbackFacts[ticker] ?? unknownFact(ticker)]),
     );
   }
 }
