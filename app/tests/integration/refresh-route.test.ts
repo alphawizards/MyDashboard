@@ -96,7 +96,7 @@ describe("/api/refresh/all", () => {
     expect(body.requestId).toBeTruthy();
   });
 
-  it("refreshes Yahoo facts from live Serenity cashtags", async () => {
+  it("refreshes Yahoo facts from live and fallback account cashtags", async () => {
     fetchAllTweetsWithDiagnostics.mockResolvedValue({
       tweetsByAuthor: {
         a: [
@@ -111,9 +111,22 @@ describe("/api/refresh/all", () => {
             url: "https://x.com/aleabitoreddit/status/a1",
           },
         ],
+        b: [
+          {
+            id: "b1",
+            text: "$NVDA",
+            created_at: "2026-05-08T00:00:00.000Z",
+            likes: 0,
+            retweets: 0,
+            replies: 0,
+            cashtags: ["$NVDA"],
+            url: "https://x.com/BryzonX/status/b1",
+          },
+        ],
       },
       diagnostics: {
         a: { handle: "aleabitoreddit", userLookup: { ok: true, status: 200 }, tweets: { ok: true, status: 200, returned: 1 } },
+        b: { handle: "BryzonX", userLookup: { ok: true, status: 200 }, tweets: { ok: true, status: 200, returned: 1 } },
       },
     });
 
@@ -122,11 +135,12 @@ describe("/api/refresh/all", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(refreshTickerFacts).toHaveBeenCalledWith(expect.arrayContaining(["SIVE", "AAOI"]));
-    expect(body.yahoo).toEqual({ source: "live", tickers: 2 });
+    expect(refreshTickerFacts).toHaveBeenCalledWith(expect.arrayContaining(["SIVE", "AAOI", "NVDA"]));
+    expect(body.yahoo).toMatchObject({ accounts: expect.any(Number), source: "mixed" });
+    expect(body.yahoo.tickers).toBeGreaterThanOrEqual(3);
   });
 
-  it("refreshes Yahoo facts from static Serenity tickers when X is not configured", async () => {
+  it("refreshes Yahoo facts from static account tickers when X is not configured", async () => {
     isXConfigured.mockReturnValue(false);
 
     const { POST } = await import("../../app/api/refresh/all/route");
@@ -138,6 +152,9 @@ describe("/api/refresh/all", () => {
     expect(refreshTickerFacts).toHaveBeenCalledWith(expect.arrayContaining(["SIVE", "AAOI"]));
     expect(body.yahoo.source).toBe("static");
     expect(body.yahoo.tickers).toBeGreaterThan(0);
+    expect(body.yahoo.accounts).toBeGreaterThan(0);
+    expect(revalidatePath).toHaveBeenCalledWith("/feed/accounts/serenity");
+    expect(revalidatePath).toHaveBeenCalledWith("/feed/accounts/fransbakker9812");
   });
 
   it("keeps diagnostics visible when X returns zero fetched posts", async () => {

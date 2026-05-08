@@ -10,7 +10,21 @@ test("ranked analysts link to individual account pages", async ({ page }) => {
   await expect(page).toHaveURL(/\/feed\/accounts\/fransbakker9812$/);
   await expect(page.getByRole("heading", { name: "FransBakker9812" }).first()).toBeVisible();
   await expect(page.getByText("@FransBakker9812").first()).toBeVisible();
+  const tracker = page.getByLabel("FransBakker9812 stock pick tracker");
+  await expect(tracker.getByRole("heading", { name: "Stock Pick Tracker" })).toBeVisible();
+  await expect(tracker.getByText("No ticker performance rows available yet.")).toBeVisible();
   await expect(page.getByText("No tweets captured for this account yet.")).toBeVisible();
+});
+
+test("non-Serenity account pages show their own stock pick tracker rows", async ({ page }) => {
+  await page.goto("/feed/accounts/sikand");
+
+  const tracker = page.getByLabel("Michael Sikand stock pick tracker");
+  await expect(tracker.getByRole("heading", { name: "Stock Pick Tracker" })).toBeVisible();
+  await expect(tracker.getByText("Company", { exact: true })).toBeVisible();
+  const avexLink = tracker.getByRole("link", { name: "Open AVEX on Yahoo Finance" });
+  await expect(avexLink).toBeVisible();
+  await expect(avexLink).toHaveAttribute("href", "https://finance.yahoo.com/quote/AVEX");
 });
 
 test("Serenity account page shows the stock pick tracker table", async ({ page }) => {
