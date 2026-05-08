@@ -142,6 +142,12 @@ function percentFromLookback(values: number[], lookback: number): number | null 
   return ((current - prior) / prior) * 100;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 function isIncompleteFact(fact: TickerFact | undefined): boolean {
   return (
     !fact ||
@@ -250,9 +256,22 @@ export async function getCachedTickerFacts(tickers: readonly string[]): Promise<
 
 export async function refreshTickerFacts(tickers: readonly string[]): Promise<Record<string, TickerFact>> {
   const normalized = [...new Set(tickers.map(normalizeTicker).filter(Boolean))];
-  const entries = await Promise.all(normalized.map(async (ticker) => [ticker, await fetchYahooTickerFact(ticker)] as const));
-  const facts = Object.fromEntries(entries.map(([ticker, fact]) => [ticker, fact ?? unknownFact(ticker)]));
-  await Promise.all(Object.values(facts).map(upsertTickerFact));
+  const facts: Record<string, TickerFact> = {};
+  const fetchedFacts: TickerFact[] = [];
+
+  for (const ticker of normalized) {
+    const fact = await fetchYahooTickerFact(ticker);
+    facts[ticker] = fact ?? unknownFact(ticker);
+    if (fact) {
+      fetchedFacts.push(fact);
+    }
+
+    if (normalized.length > 1) {
+      await sleep(100);
+    }
+  }
+
+  await Promise.all(fetchedFacts.map(upsertTickerFact));
   return facts;
 }
 
