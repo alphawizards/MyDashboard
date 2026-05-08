@@ -42,6 +42,21 @@ describe("account stock tracker", () => {
     });
   });
 
+  it("counts each ticker once per tweet", () => {
+    expect(buildTickerMentionCounts([
+      {
+        id: "dupe",
+        text: "$AMD $AMD AMD",
+        created_at: "",
+        likes: 0,
+        retweets: 0,
+        replies: 0,
+        cashtags: ["$AMD", "AMD", "amd"],
+        url: "",
+      },
+    ])).toEqual({ AMD: 1 });
+  });
+
   it("joins mentions with company, theme, and performance facts", () => {
     const rows = buildAccountTickerPerformanceRows(tweets, {
       AAOI: {

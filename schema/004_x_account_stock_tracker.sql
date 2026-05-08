@@ -31,6 +31,37 @@ alter table tweets add column if not exists cashtags jsonb not null default '[]'
 
 create index if not exists tweets_author_key_posted_idx on tweets (author_key, posted_at desc);
 
+create table if not exists tweet_ticker_mentions (
+  tweet_id       text not null references tweets(id) on delete cascade,
+  author_key     text not null,
+  ticker         text not null,
+  mention_count  int not null default 1,
+  posted_at      timestamptz not null,
+  first_seen_at  timestamptz not null default now(),
+  primary key (tweet_id, ticker)
+);
+
+create index if not exists tweet_ticker_mentions_ticker_idx on tweet_ticker_mentions (ticker);
+create index if not exists tweet_ticker_mentions_author_ticker_idx on tweet_ticker_mentions (author_key, ticker);
+create index if not exists tweet_ticker_mentions_ticker_posted_idx on tweet_ticker_mentions (ticker, posted_at desc);
+
+insert into tweet_ticker_mentions (tweet_id, author_key, ticker, mention_count, posted_at, first_seen_at)
+select distinct on (t.id, normalized.ticker)
+  t.id,
+  t.author_key,
+  normalized.ticker,
+  1,
+  t.posted_at,
+  t.fetched_at
+from tweets t
+cross join lateral (
+  select upper(regexp_replace(tag.value, '^\$', '')) as ticker
+  from jsonb_array_elements_text(t.cashtags) as tag(value)
+) normalized
+where t.author_key is not null
+  and normalized.ticker <> ''
+on conflict (tweet_id, ticker) do nothing;
+
 create table if not exists ticker_profiles (
   ticker      text primary key,
   company     text not null,

@@ -3,7 +3,7 @@ import { tweetsByAuthor as staticTweetsByAuthor } from "../lib/static-data";
 import { buildAccountCompleteTweetMap } from "../lib/accounts";
 import { getTrackedAuthors } from "@/lib/accounts/server";
 import { FeedClient } from "./feed-client";
-import { getCachedTweetsByAuthor } from "@/lib/x/cache";
+import { getCachedTweetsByAuthor, getLastXRefreshTime, getTickerMentionGroupsFromDb } from "@/lib/x/cache";
 
 // Revalidate this page at most every 30 minutes in the background.
 // The Refresh button forces an immediate revalidation via /api/refresh/all.
@@ -14,17 +14,27 @@ export default async function FeedPage() {
   let tweetsByAuthor = buildAccountCompleteTweetMap(authorProfiles, staticTweetsByAuthor);
   let dataSource: "cached" | "static" = "static";
   let lastRefreshTime = "Not available";
+  let tickerMentionGroups = null;
 
-  const cached = await getCachedTweetsByAuthor(authorProfiles);
+  const [cached, cachedLastRefreshTime, cachedMentionGroups] = await Promise.all([
+    getCachedTweetsByAuthor(authorProfiles),
+    getLastXRefreshTime(authorProfiles),
+    getTickerMentionGroupsFromDb(authorProfiles),
+  ]);
   const totalCached = cached ? Object.values(cached).reduce((sum, tweets) => sum + tweets.length, 0) : 0;
   if (cached && totalCached > 0) {
     tweetsByAuthor = buildAccountCompleteTweetMap(authorProfiles, cached);
     dataSource = "cached";
-    lastRefreshTime = `${new Date().toLocaleString("en-AU", {
+  }
+  if (cachedLastRefreshTime) {
+    lastRefreshTime = `${new Date(cachedLastRefreshTime).toLocaleString("en-AU", {
       timeZone: "Australia/Brisbane",
       dateStyle: "medium",
       timeStyle: "short",
     })} AEST`;
+  }
+  if (cachedMentionGroups && (cachedMentionGroups.shared.length || cachedMentionGroups.uniqueByAuthor.some((group) => group.tickers.length))) {
+    tickerMentionGroups = cachedMentionGroups;
   }
 
   return (
@@ -55,6 +65,7 @@ export default async function FeedPage() {
         authors={authorProfiles}
         tweetsByAuthor={tweetsByAuthor}
         lastRefreshTime={lastRefreshTime}
+        tickerMentionGroups={tickerMentionGroups}
         accountCreationEnabled={!process.env.REFRESH_SHARED_SECRET}
       />
     </main>

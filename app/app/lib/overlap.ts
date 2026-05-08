@@ -3,7 +3,8 @@ import type { TickerMentionGroups, TickerOverlap, Tweet } from "./types";
 export function buildTickerCounts(tweets: readonly Tweet[]) {
   const counts: Record<string, number> = {};
   for (const tweet of tweets) {
-    for (const tag of tweet.cashtags) {
+    const uniqueTags = [...new Set(tweet.cashtags.map((tag) => tag.trim().replace(/^\$/, "").toUpperCase()).filter(Boolean))];
+    for (const tag of uniqueTags) {
       counts[tag] = (counts[tag] ?? 0) + 1;
     }
   }

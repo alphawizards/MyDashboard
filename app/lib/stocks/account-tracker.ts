@@ -256,25 +256,25 @@ function mergeTickerFactFallbacks(
 export function buildTickerMentionCounts(tweets: readonly Tweet[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const tweet of tweets) {
-    for (const rawTag of tweet.cashtags ?? []) {
-      const ticker = normalizeTicker(rawTag);
-      if (!ticker) continue;
+    const tickers = [...new Set((tweet.cashtags ?? []).map(normalizeTicker).filter(Boolean))];
+    for (const ticker of tickers) {
       counts[ticker] = (counts[ticker] ?? 0) + 1;
     }
   }
   return counts;
 }
 
-export function buildAccountTickerPerformanceRows(
-  tweets: readonly Tweet[],
+export function buildAccountTickerPerformanceRowsFromCounts(
+  mentionCounts: Record<string, number>,
   factsByTicker: Record<string, TickerFact | undefined>,
 ): AccountTickerPerformanceRow[] {
-  return Object.entries(buildTickerMentionCounts(tweets))
+  return Object.entries(mentionCounts)
     .map(([ticker, mentions]) => {
-      const fact = factsByTicker[ticker];
+      const normalized = normalizeTicker(ticker);
+      const fact = factsByTicker[normalized];
       return {
-        ticker,
-        yahooUrl: getYahooFinanceUrl(ticker),
+        ticker: normalized,
+        yahooUrl: getYahooFinanceUrl(normalized),
         company: fact?.company ?? "Unknown",
         theme: fact?.theme ?? "Unknown",
         perf1M: fact?.perf1M ?? null,
@@ -290,6 +290,13 @@ export function buildAccountTickerPerformanceRows(
     );
 }
 
+export function buildAccountTickerPerformanceRows(
+  tweets: readonly Tweet[],
+  factsByTicker: Record<string, TickerFact | undefined>,
+): AccountTickerPerformanceRow[] {
+  return buildAccountTickerPerformanceRowsFromCounts(buildTickerMentionCounts(tweets), factsByTicker);
+}
+
 export async function getAccountTickerPerformanceRows(
   tweets: readonly Tweet[],
 ): Promise<AccountTickerPerformanceRow[]> {
@@ -303,6 +310,14 @@ export async function getAccountTickerPerformanceRows(
   }
 
   return buildAccountTickerPerformanceRows(tweets, facts);
+}
+
+export async function getAccountTickerPerformanceRowsFromCounts(
+  mentionCounts: Record<string, number>,
+): Promise<AccountTickerPerformanceRow[]> {
+  const tickers = Object.keys(mentionCounts);
+  const facts = await getCachedTickerFacts(tickers);
+  return buildAccountTickerPerformanceRowsFromCounts(mentionCounts, facts);
 }
 
 export async function getCachedTickerFacts(tickers: readonly string[]): Promise<Record<string, TickerFact>> {

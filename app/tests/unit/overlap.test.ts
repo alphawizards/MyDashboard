@@ -9,12 +9,12 @@ describe("buildTickerOverlap", () => {
     const shared = buildTickerOverlap(tweetsByAuthor, colorByKey).filter((row) => row.shared);
 
     expect(shared.map((row) => row.ticker)).toEqual([
-      "$AMD",
-      "$AAOI",
-      "$INTC",
-      "$LITE",
-      "$MXL",
-      "$SOI",
+      "AMD",
+      "AAOI",
+      "INTC",
+      "LITE",
+      "MXL",
+      "SOI",
     ]);
   });
 
@@ -22,11 +22,11 @@ describe("buildTickerOverlap", () => {
     const shared = buildTickerOverlap(tweetsByAuthor, colorByKey).filter((row) => row.shared);
     const byTicker = Object.fromEntries(shared.map((row) => [row.ticker, row]));
 
-    expect(byTicker.$AMD.authors).toEqual([
+    expect(byTicker.AMD.authors).toEqual([
       { who: "w", count: 2 },
       { who: "b", count: 2 },
     ]);
-    expect(byTicker.$MXL.authors).toEqual([
+    expect(byTicker.MXL.authors).toEqual([
       { who: "a", count: 1 },
       { who: "b", count: 1 },
     ]);
@@ -46,11 +46,27 @@ describe("buildTickerOverlap", () => {
       { alpha: "#111", beta: "#222", gamma: "#333" },
     );
 
-    expect(groups.shared.map((row) => row.ticker)).toEqual(["$AAOI"]);
+    expect(groups.shared.map((row) => row.ticker)).toEqual(["AAOI"]);
     expect(groups.uniqueByAuthor).toEqual([
-      { who: "alpha", tickers: [{ ticker: "$SIVE", who: "alpha", count: 1, color: "#111" }] },
-      { who: "beta", tickers: [{ ticker: "$MXL", who: "beta", count: 1, color: "#222" }] },
+      { who: "alpha", tickers: [{ ticker: "SIVE", who: "alpha", count: 1, color: "#111" }] },
+      { who: "beta", tickers: [{ ticker: "MXL", who: "beta", count: 1, color: "#222" }] },
       { who: "gamma", tickers: [] },
+    ]);
+  });
+
+  it("normalizes and counts duplicate cashtags once per tweet", () => {
+    const groups = buildTickerMentionGroups(
+      {
+        alpha: [
+          { id: "1", text: "$AMD $AMD amd", created_at: "", likes: 0, retweets: 0, replies: 0, cashtags: ["$AMD", "AMD", "amd"], url: "" },
+        ],
+        beta: [],
+      },
+      { alpha: "#111", beta: "#222" },
+    );
+
+    expect(groups.uniqueByAuthor[0].tickers).toEqual([
+      { ticker: "AMD", who: "alpha", count: 1, color: "#111" },
     ]);
   });
 });
