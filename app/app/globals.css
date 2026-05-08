@@ -769,10 +769,23 @@ a.cashtag-tag:focus-visible,
   border-bottom: 0;
 }
 
-.ticker-performance-row strong {
+.ticker-performance-row strong,
+.ticker-performance-symbol {
   color: #fff;
   font-family: var(--font-geist-mono), monospace;
   font-size: 16px;
+  font-weight: 900;
+}
+
+.ticker-performance-symbol {
+  text-decoration: none;
+}
+
+.ticker-performance-symbol:hover,
+.ticker-performance-symbol:focus-visible {
+  color: var(--s);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .ticker-performance-head {

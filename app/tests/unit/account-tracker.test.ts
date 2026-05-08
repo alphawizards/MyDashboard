@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildAccountTickerPerformanceRows,
   buildTickerMentionCounts,
+  getYahooFinanceUrl,
   resolveYahooSymbolCandidates,
 } from "@/lib/stocks/account-tracker";
 import type { Tweet } from "@/app/lib/types";
@@ -64,6 +65,7 @@ describe("account stock tracker", () => {
     expect(rows).toEqual([
       expect.objectContaining({
         ticker: "AAOI",
+        yahooUrl: "https://finance.yahoo.com/quote/AAOI",
         company: "Applied Optoelectronics, Inc.",
         theme: "Communication Equipment",
         perf1M: 51.8,
@@ -91,5 +93,11 @@ describe("account stock tracker", () => {
     expect(resolveYahooSymbolCandidates("SOI")).toEqual(["SOI", "SOI.PA"]);
     expect(resolveYahooSymbolCandidates("HPS.A")).toEqual(["HPS.A", "HPS-A.TO", "HPS-A"]);
     expect(resolveYahooSymbolCandidates("$AAOI")).toEqual(["AAOI"]);
+  });
+
+  it("builds Yahoo Finance links from the preferred resolved symbol", () => {
+    expect(getYahooFinanceUrl("AAOI")).toBe("https://finance.yahoo.com/quote/AAOI");
+    expect(getYahooFinanceUrl("SIVE")).toBe("https://finance.yahoo.com/quote/SIVE.ST");
+    expect(getYahooFinanceUrl("HPS.A")).toBe("https://finance.yahoo.com/quote/HPS-A.TO");
   });
 });
