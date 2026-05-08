@@ -21,6 +21,8 @@ export type TickerFact = {
   theme: string;
   perf1M: number | null;
   perf12M: number | null;
+  profileFetchedAt?: string | null;
+  performanceFetchedAt?: string | null;
 };
 
 type TickerProfileRow = {
@@ -31,6 +33,8 @@ type TickerProfileRow = {
   theme: string;
   perf_1m: string | number | null;
   perf_12m: string | number | null;
+  profile_fetched_at: string | Date | null;
+  performance_fetched_at: string | Date | null;
 };
 
 type YahooQuoteSummary = {
@@ -86,6 +90,9 @@ const YAHOO_SYMBOL_ALIASES: Record<string, readonly string[]> = {
   SOI: ["SOI.PA"],
 };
 
+const PROFILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const PERFORMANCE_TTL_MS = 24 * 60 * 60 * 1000;
+
 function normalizeTicker(ticker: string): string {
   return ticker.trim().replace(/^\$/, "").toUpperCase();
 }
@@ -127,6 +134,8 @@ function staticFact(stock: Stock): TickerFact {
     theme: stock.sector || "Unknown",
     perf1M: stock.perf1M,
     perf12M: null,
+    profileFetchedAt: null,
+    performanceFetchedAt: null,
   };
 }
 
@@ -148,14 +157,27 @@ function sleep(ms: number): Promise<void> {
   });
 }
 
-function isIncompleteFact(fact: TickerFact | undefined): boolean {
-  return (
-    !fact ||
-    fact.company === "Unknown" ||
-    fact.theme === "Unknown" ||
-    fact.perf1M === null ||
-    fact.perf12M === null
-  );
+function timestampToMs(value: string | Date | null | undefined): number | null {
+  if (value instanceof Date) return value.getTime();
+  if (!value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function isFresh(value: string | Date | null | undefined, ttlMs: number, nowMs = Date.now()): boolean {
+  const fetchedMs = timestampToMs(value);
+  return fetchedMs !== null && nowMs - fetchedMs >= 0 && nowMs - fetchedMs < ttlMs;
+}
+
+export function shouldRefreshTickerFact(fact: TickerFact | undefined, nowMs = Date.now()): boolean {
+  if (!fact) return true;
+
+  const profileIncomplete = fact.company === "Unknown" || fact.theme === "Unknown";
+  const performanceIncomplete = fact.perf1M === null || fact.perf12M === null;
+  const profileStale = !isFresh(fact.profileFetchedAt, PROFILE_TTL_MS, nowMs);
+  const performanceStale = !isFresh(fact.performanceFetchedAt, PERFORMANCE_TTL_MS, nowMs);
+
+  return profileIncomplete || performanceIncomplete || profileStale || performanceStale;
 }
 
 export function buildTickerMentionCounts(tweets: readonly Tweet[]): Record<string, number> {
@@ -200,7 +222,7 @@ export async function getAccountTickerPerformanceRows(
 ): Promise<AccountTickerPerformanceRow[]> {
   const tickers = Object.keys(buildTickerMentionCounts(tweets));
   let facts = await getCachedTickerFacts(tickers);
-  const tickersNeedingYahoo = tickers.filter((ticker) => isIncompleteFact(facts[ticker]));
+  const tickersNeedingYahoo = tickers.filter((ticker) => shouldRefreshTickerFact(facts[ticker]));
 
   if (tickersNeedingYahoo.length) {
     const refreshedFacts = await refreshTickerFacts(tickersNeedingYahoo);
@@ -221,7 +243,16 @@ export async function getCachedTickerFacts(tickers: readonly string[]): Promise<
   try {
     const rows = await queryRows<TickerProfileRow>(
       `
-        select p.ticker, p.company, p.sector, p.industry, p.theme, s.perf_1m, s.perf_12m
+        select
+          p.ticker,
+          p.company,
+          p.sector,
+          p.industry,
+          p.theme,
+          p.fetched_at as profile_fetched_at,
+          s.perf_1m,
+          s.perf_12m,
+          s.fetched_at as performance_fetched_at
         from ticker_profiles p
         left join ticker_performance_snapshots s on s.ticker = p.ticker
         where p.ticker = any($1::text[])
@@ -240,6 +271,8 @@ export async function getCachedTickerFacts(tickers: readonly string[]): Promise<
           theme: row.theme || row.industry || row.sector || "Unknown",
           perf1M: toNumber(row.perf_1m),
           perf12M: toNumber(row.perf_12m),
+          profileFetchedAt: row.profile_fetched_at instanceof Date ? row.profile_fetched_at.toISOString() : row.profile_fetched_at,
+          performanceFetchedAt: row.performance_fetched_at instanceof Date ? row.performance_fetched_at.toISOString() : row.performance_fetched_at,
         },
       ]),
     ) as Record<string, TickerFact>;
@@ -451,5 +484,7 @@ function unknownFact(ticker: string): TickerFact {
     theme: "Unknown",
     perf1M: null,
     perf12M: null,
+    profileFetchedAt: null,
+    performanceFetchedAt: null,
   };
 }
