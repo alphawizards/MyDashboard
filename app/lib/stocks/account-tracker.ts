@@ -81,6 +81,12 @@ type YahooSearchResponse = {
   }>;
 };
 
+type TiingoPriceRow = {
+  date?: string;
+  close?: number | null;
+  adjClose?: number | null;
+};
+
 const YAHOO_SYMBOL_ALIASES: Record<string, readonly string[]> = {
   "HPS.A": ["HPS-A.TO"],
   IQE: ["IQE.L"],
@@ -90,8 +96,25 @@ const YAHOO_SYMBOL_ALIASES: Record<string, readonly string[]> = {
   SOI: ["SOI.PA"],
 };
 
+const SEEDED_TICKER_FACTS: Record<string, TickerFact> = {
+  AAOI: seededFact("AAOI", "Applied Optoelectronics, Inc.", "Technology", "Communication Equipment"),
+  AEHR: seededFact("AEHR", "Aehr Test Systems, Inc.", "Technology", "Semiconductor Equipment & Materials"),
+  AMSC: seededFact("AMSC", "American Superconductor Corporation", "Industrials", "Specialty Industrial Machinery"),
+  AAPL: seededFact("AAPL", "Apple Inc.", "Technology", "Consumer Electronics"),
+  AXTI: seededFact("AXTI", "AXT, Inc.", "Technology", "Semiconductor Equipment & Materials"),
+  "HPS.A": seededFact("HPS.A", "Hammond Power Solutions Inc.", "Industrials", "Electrical Equipment & Parts"),
+  IQE: seededFact("IQE", "IQE plc", "Technology", "Semiconductor Equipment & Materials"),
+  LITE: seededFact("LITE", "Lumentum Holdings Inc.", "Technology", "Communication Equipment"),
+  MXL: seededFact("MXL", "MaxLinear, Inc.", "Technology", "Semiconductors"),
+  PLPC: seededFact("PLPC", "Preformed Line Products Company", "Industrials", "Electrical Equipment & Parts"),
+  SIVE: seededFact("SIVE", "Sivers Semiconductors AB (publ)", "Technology", "Semiconductors"),
+  SNDK: seededFact("SNDK", "Sandisk Corporation", "Technology", "Computer Hardware"),
+  SOI: seededFact("SOI", "Soitec SA", "Technology", "Semiconductor Equipment & Materials"),
+};
+
 const PROFILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PERFORMANCE_TTL_MS = 24 * 60 * 60 * 1000;
+const TIINGO_LOOKBACK_DAYS = 400;
 
 function normalizeTicker(ticker: string): string {
   return ticker.trim().replace(/^\$/, "").toUpperCase();
@@ -125,6 +148,25 @@ function toNumber(value: string | number | null): number | null {
   return null;
 }
 
+function seededFact(
+  ticker: string,
+  company: string,
+  sector: string,
+  industry: string,
+): TickerFact {
+  return {
+    ticker,
+    company,
+    sector,
+    industry,
+    theme: industry || sector || "Unknown",
+    perf1M: null,
+    perf12M: null,
+    profileFetchedAt: null,
+    performanceFetchedAt: null,
+  };
+}
+
 function staticFact(stock: Stock): TickerFact {
   return {
     ticker: stock.ticker,
@@ -149,6 +191,11 @@ function percentFromLookback(values: number[], lookback: number): number | null 
   const prior = values.at(-lookback);
   if (!current || !prior) return null;
   return ((current - prior) / prior) * 100;
+}
+
+function dateDaysAgo(days: number): string {
+  const date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return date.toISOString().slice(0, 10);
 }
 
 function sleep(ms: number): Promise<void> {
@@ -178,6 +225,32 @@ export function shouldRefreshTickerFact(fact: TickerFact | undefined, nowMs = Da
   const performanceStale = !isFresh(fact.performanceFetchedAt, PERFORMANCE_TTL_MS, nowMs);
 
   return profileIncomplete || performanceIncomplete || profileStale || performanceStale;
+}
+
+export function isTiingoEodCandidate(ticker: string): boolean {
+  const normalized = normalizeTicker(ticker);
+  return (
+    /^[A-Z0-9-]+$/.test(normalized) &&
+    !YAHOO_SYMBOL_ALIASES[normalized]
+  );
+}
+
+function mergeTickerFactFallbacks(
+  cached: TickerFact | undefined,
+  fallback: TickerFact | undefined,
+): TickerFact | undefined {
+  if (!cached) return fallback;
+  if (!fallback) return cached;
+
+  return {
+    ...cached,
+    company: cached.company === "Unknown" ? fallback.company : cached.company,
+    sector: cached.sector ?? fallback.sector,
+    industry: cached.industry ?? fallback.industry,
+    theme: cached.theme === "Unknown" ? fallback.theme : cached.theme,
+    perf1M: cached.perf1M ?? fallback.perf1M,
+    perf12M: cached.perf12M ?? fallback.perf12M,
+  };
 }
 
 export function buildTickerMentionCounts(tweets: readonly Tweet[]): Record<string, number> {
@@ -237,6 +310,7 @@ export async function getCachedTickerFacts(tickers: readonly string[]): Promise<
   const staticFacts = Object.fromEntries(
     stocks.map((stock) => [stock.ticker, staticFact(stock)]),
   ) as Record<string, TickerFact>;
+  const fallbackFacts = { ...SEEDED_TICKER_FACTS, ...staticFacts };
 
   if (!normalized.length) return {};
 
@@ -278,11 +352,14 @@ export async function getCachedTickerFacts(tickers: readonly string[]): Promise<
     ) as Record<string, TickerFact>;
 
     return Object.fromEntries(
-      normalized.map((ticker) => [ticker, cached[ticker] ?? staticFacts[ticker] ?? unknownFact(ticker)]),
+      normalized.map((ticker) => [
+        ticker,
+        mergeTickerFactFallbacks(cached[ticker], fallbackFacts[ticker]) ?? unknownFact(ticker),
+      ]),
     );
   } catch {
     return Object.fromEntries(
-      normalized.map((ticker) => [ticker, staticFacts[ticker] ?? unknownFact(ticker)]),
+      normalized.map((ticker) => [ticker, fallbackFacts[ticker] ?? unknownFact(ticker)]),
     );
   }
 }
@@ -325,12 +402,17 @@ async function fetchYahooTickerFactBySymbol(ticker: string, yahooSymbol: string)
     fetchYahooSummary(yahooSymbol),
     fetchYahooChart(yahooSymbol),
   ]);
+  const tiingoPerformance = chart.perf1M === null || chart.perf12M === null
+    ? await fetchTiingoPerformance(ticker)
+    : { perf1M: null, perf12M: null };
 
   if (
     !summary.company &&
     !summary.sector &&
     !summary.industry &&
     !chart.company &&
+    tiingoPerformance.perf1M === null &&
+    tiingoPerformance.perf12M === null &&
     chart.perf1M === null &&
     chart.perf12M === null
   ) {
@@ -352,8 +434,8 @@ async function fetchYahooTickerFactBySymbol(ticker: string, yahooSymbol: string)
     sector,
     industry,
     theme: industry ?? sector ?? "Unknown",
-    perf1M: chart.perf1M ?? fallback?.perf1M ?? null,
-    perf12M: chart.perf12M,
+    perf1M: chart.perf1M ?? tiingoPerformance.perf1M ?? fallback?.perf1M ?? null,
+    perf12M: chart.perf12M ?? tiingoPerformance.perf12M,
   };
 }
 
@@ -440,6 +522,44 @@ async function fetchYahooChart(ticker: string): Promise<{
     };
   } catch {
     return { company: null, perf1M: null, perf12M: null };
+  }
+}
+
+async function fetchTiingoPerformance(ticker: string): Promise<{
+  perf1M: number | null;
+  perf12M: number | null;
+}> {
+  const token = process.env.TIINGO_API_TOKEN?.trim() || process.env.TIINGO_TOKEN?.trim();
+  if (!token || !isTiingoEodCandidate(ticker)) {
+    return { perf1M: null, perf12M: null };
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(normalizeTicker(ticker).toLowerCase())}/prices?startDate=${dateDaysAgo(TIINGO_LOOKBACK_DAYS)}`,
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Token ${token}`,
+        },
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) return { perf1M: null, perf12M: null };
+    const body = (await res.json()) as TiingoPriceRow[];
+    const closes = compactNumbers(
+      body
+        .slice()
+        .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+        .map((row) => row.adjClose ?? row.close ?? null),
+    );
+
+    return {
+      perf1M: percentFromLookback(closes, 21),
+      perf12M: percentFromLookback(closes, Math.min(252, closes.length - 1)),
+    };
+  } catch {
+    return { perf1M: null, perf12M: null };
   }
 }
 
