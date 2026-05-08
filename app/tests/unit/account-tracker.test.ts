@@ -4,6 +4,7 @@ import {
   buildTickerMentionCounts,
   getYahooFinanceUrl,
   resolveYahooSymbolCandidates,
+  shouldRefreshTickerFact,
 } from "@/lib/stocks/account-tracker";
 import type { Tweet } from "@/app/lib/types";
 
@@ -99,5 +100,46 @@ describe("account stock tracker", () => {
     expect(getYahooFinanceUrl("AAOI")).toBe("https://finance.yahoo.com/quote/AAOI");
     expect(getYahooFinanceUrl("SIVE")).toBe("https://finance.yahoo.com/quote/SIVE.ST");
     expect(getYahooFinanceUrl("HPS.A")).toBe("https://finance.yahoo.com/quote/HPS-A.TO");
+  });
+
+  it("refreshes missing or stale Yahoo facts while reusing fresh cache rows", () => {
+    const now = Date.parse("2026-05-08T00:00:00.000Z");
+    const freshProfile = "2026-04-25T00:00:00.000Z";
+    const freshPerformance = "2026-05-07T12:00:00.000Z";
+
+    expect(shouldRefreshTickerFact(undefined, now)).toBe(true);
+    expect(shouldRefreshTickerFact({
+      ticker: "AAOI",
+      company: "Applied Optoelectronics, Inc.",
+      sector: "Technology",
+      industry: "Communication Equipment",
+      theme: "Communication Equipment",
+      perf1M: 12,
+      perf12M: 120,
+      profileFetchedAt: freshProfile,
+      performanceFetchedAt: freshPerformance,
+    }, now)).toBe(false);
+    expect(shouldRefreshTickerFact({
+      ticker: "AAOI",
+      company: "Applied Optoelectronics, Inc.",
+      sector: "Technology",
+      industry: "Communication Equipment",
+      theme: "Communication Equipment",
+      perf1M: 12,
+      perf12M: 120,
+      profileFetchedAt: "2026-03-01T00:00:00.000Z",
+      performanceFetchedAt: freshPerformance,
+    }, now)).toBe(true);
+    expect(shouldRefreshTickerFact({
+      ticker: "AAOI",
+      company: "Applied Optoelectronics, Inc.",
+      sector: "Technology",
+      industry: "Communication Equipment",
+      theme: "Communication Equipment",
+      perf1M: 12,
+      perf12M: 120,
+      profileFetchedAt: freshProfile,
+      performanceFetchedAt: "2026-05-06T00:00:00.000Z",
+    }, now)).toBe(true);
   });
 });
