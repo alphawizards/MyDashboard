@@ -65,6 +65,18 @@ type YahooChartResponse = {
   };
 };
 
+type YahooSearchResponse = {
+  quotes?: Array<{
+    symbol?: string;
+    longname?: string;
+    shortname?: string;
+    sector?: string;
+    sectorDisp?: string;
+    industry?: string;
+    industryDisp?: string;
+  }>;
+};
+
 const YAHOO_SYMBOL_ALIASES: Record<string, readonly string[]> = {
   "HPS.A": ["HPS-A.TO"],
   IQE: ["IQE.L"],
@@ -130,6 +142,16 @@ function percentFromLookback(values: number[], lookback: number): number | null 
   return ((current - prior) / prior) * 100;
 }
 
+function isIncompleteFact(fact: TickerFact | undefined): boolean {
+  return (
+    !fact ||
+    fact.company === "Unknown" ||
+    fact.theme === "Unknown" ||
+    fact.perf1M === null ||
+    fact.perf12M === null
+  );
+}
+
 export function buildTickerMentionCounts(tweets: readonly Tweet[]): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const tweet of tweets) {
@@ -171,7 +193,14 @@ export async function getAccountTickerPerformanceRows(
   tweets: readonly Tweet[],
 ): Promise<AccountTickerPerformanceRow[]> {
   const tickers = Object.keys(buildTickerMentionCounts(tweets));
-  const facts = await getCachedTickerFacts(tickers);
+  let facts = await getCachedTickerFacts(tickers);
+  const tickersNeedingYahoo = tickers.filter((ticker) => isIncompleteFact(facts[ticker]));
+
+  if (tickersNeedingYahoo.length) {
+    const refreshedFacts = await refreshTickerFacts(tickersNeedingYahoo);
+    facts = { ...facts, ...refreshedFacts };
+  }
+
   return buildAccountTickerPerformanceRows(tweets, facts);
 }
 
@@ -281,6 +310,11 @@ async function fetchYahooSummary(ticker: string): Promise<{
   sector: string | null;
   industry: string | null;
 }> {
+  const search = await fetchYahooSearchSummary(ticker);
+  if (search.company || search.sector || search.industry) {
+    return search;
+  }
+
   try {
     const res = await fetch(
       `https://query2.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=price,assetProfile`,
@@ -296,6 +330,34 @@ async function fetchYahooSummary(ticker: string): Promise<{
       company: result?.price?.longName ?? result?.price?.shortName ?? null,
       sector: result?.assetProfile?.sector ?? null,
       industry: result?.assetProfile?.industry ?? null,
+    };
+  } catch {
+    return { company: null, sector: null, industry: null };
+  }
+}
+
+async function fetchYahooSearchSummary(ticker: string): Promise<{
+  company: string | null;
+  sector: string | null;
+  industry: string | null;
+}> {
+  try {
+    const res = await fetch(
+      `https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(ticker)}&quotesCount=5&newsCount=0`,
+      {
+        headers: { accept: "application/json", "user-agent": "Mozilla/5.0 StockDashboard/1.0" },
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) return { company: null, sector: null, industry: null };
+    const body = (await res.json()) as YahooSearchResponse;
+    const normalizedTicker = ticker.toUpperCase();
+    const quote = body.quotes?.find((item) => item.symbol?.toUpperCase() === normalizedTicker);
+
+    return {
+      company: quote?.longname ?? quote?.shortname ?? null,
+      sector: quote?.sector ?? quote?.sectorDisp ?? null,
+      industry: quote?.industry ?? quote?.industryDisp ?? null,
     };
   } catch {
     return { company: null, sector: null, industry: null };
@@ -322,7 +384,7 @@ async function fetchYahooChart(ticker: string): Promise<{
     return {
       company: result?.meta?.longName ?? result?.meta?.shortName ?? null,
       perf1M: percentFromLookback(closes, 21),
-      perf12M: percentFromLookback(closes, Math.min(252, closes.length)),
+      perf12M: percentFromLookback(closes, Math.min(252, closes.length - 1)),
     };
   } catch {
     return { company: null, perf1M: null, perf12M: null };
