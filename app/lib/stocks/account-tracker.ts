@@ -5,6 +5,7 @@ import { queryRows } from "@/lib/db/postgres";
 
 export type AccountTickerPerformanceRow = {
   ticker: string;
+  yahooUrl: string;
   company: string;
   theme: string;
   perf1M: number | null;
@@ -91,6 +92,11 @@ export function resolveYahooSymbolCandidates(ticker: string): string[] {
   return [...new Set(candidates.filter(Boolean))];
 }
 
+export function getYahooFinanceUrl(ticker: string): string {
+  const yahooSymbol = resolveYahooSymbolCandidates(ticker)[1] ?? resolveYahooSymbolCandidates(ticker)[0] ?? normalizeTicker(ticker);
+  return `https://finance.yahoo.com/quote/${encodeURIComponent(yahooSymbol)}`;
+}
+
 function toNumber(value: string | number | null): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string") {
@@ -145,6 +151,7 @@ export function buildAccountTickerPerformanceRows(
       const fact = factsByTicker[ticker];
       return {
         ticker,
+        yahooUrl: getYahooFinanceUrl(ticker),
         company: fact?.company ?? "Unknown",
         theme: fact?.theme ?? "Unknown",
         perf1M: fact?.perf1M ?? null,

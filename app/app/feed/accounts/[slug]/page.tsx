@@ -200,7 +200,15 @@ function TickerPerformanceTable({
           </div>
           {rows.map((row) => (
             <div className="ticker-performance-row" role="row" key={row.ticker}>
-              <strong>{row.ticker}</strong>
+              <a
+                aria-label={`Open ${row.ticker} on Yahoo Finance`}
+                className="ticker-performance-symbol"
+                href={row.yahooUrl}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {row.ticker}
+              </a>
               <span>{row.company}</span>
               <span>{row.theme}</span>
               <PerformanceCell value={row.perf1M} />

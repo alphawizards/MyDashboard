@@ -24,5 +24,7 @@ test("Serenity account page shows the stock pick tracker table", async ({ page }
   await expect(tracker.getByText("1M %", { exact: true })).toBeVisible();
   await expect(tracker.getByText("12M %", { exact: true })).toBeVisible();
   await expect(tracker.getByText("Mentions", { exact: true })).toBeVisible();
-  await expect(tracker.getByText("AAOI", { exact: true }).first()).toBeVisible();
+  const aaoiLink = tracker.getByRole("link", { name: "Open AAOI on Yahoo Finance" });
+  await expect(aaoiLink).toBeVisible();
+  await expect(aaoiLink).toHaveAttribute("href", "https://finance.yahoo.com/quote/AAOI");
 });
