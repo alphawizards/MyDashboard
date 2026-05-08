@@ -8,6 +8,7 @@ All secrets live in Railway env vars. Never committed.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | client + server | Railway + `.env.local` | Public, safe to expose |
 | `SUPABASE_SERVICE_ROLE_KEY` | worker + API routes | Railway only | **Server only. Bypasses RLS.** |
 | `X_BEARER_TOKEN` | worker | Railway only | X API v2 bearer |
+| `TIINGO_API_TOKEN` | server + refresh | Railway + `.env.local` | Tiingo End-of-Day token. Used as a US ticker performance fallback when Yahoo chart data is unavailable. |
 | `REFRESH_SHARED_SECRET` | worker + API routes | Railway only | Guards `/api/refresh/*` |
 | `SENTRY_DSN` | client + server | Railway | Optional in dev |
 | `HEARTBEAT_URL` | worker | Railway | Better Stack / Cronitor ping URL |
@@ -30,6 +31,7 @@ most likely cause of repeated Postgres `invalid length of startup packet` logs.
 Copy `app/.env.example` → `app/.env.local`. Never commit `.env.local`.
 
 ## Rotation
+- **Tiingo API token**: Tiingo account API token -> update Railway -> trigger manual refresh to verify.
 - **X bearer**: X dev portal → rotate → update Railway → trigger manual refresh to verify.
 - **Supabase service role**: Supabase → Settings → API → rotate → update Railway.
 - **Shared secret**: `openssl rand -hex 32` → update Railway.

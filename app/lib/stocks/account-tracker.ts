@@ -81,6 +81,12 @@ type YahooSearchResponse = {
   }>;
 };
 
+type TiingoPriceRow = {
+  date?: string;
+  close?: number | null;
+  adjClose?: number | null;
+};
+
 const YAHOO_SYMBOL_ALIASES: Record<string, readonly string[]> = {
   "HPS.A": ["HPS-A.TO"],
   IQE: ["IQE.L"],
@@ -108,6 +114,7 @@ const SEEDED_TICKER_FACTS: Record<string, TickerFact> = {
 
 const PROFILE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const PERFORMANCE_TTL_MS = 24 * 60 * 60 * 1000;
+const TIINGO_LOOKBACK_DAYS = 400;
 
 function normalizeTicker(ticker: string): string {
   return ticker.trim().replace(/^\$/, "").toUpperCase();
@@ -186,6 +193,11 @@ function percentFromLookback(values: number[], lookback: number): number | null 
   return ((current - prior) / prior) * 100;
 }
 
+function dateDaysAgo(days: number): string {
+  const date = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return date.toISOString().slice(0, 10);
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -213,6 +225,14 @@ export function shouldRefreshTickerFact(fact: TickerFact | undefined, nowMs = Da
   const performanceStale = !isFresh(fact.performanceFetchedAt, PERFORMANCE_TTL_MS, nowMs);
 
   return profileIncomplete || performanceIncomplete || profileStale || performanceStale;
+}
+
+export function isTiingoEodCandidate(ticker: string): boolean {
+  const normalized = normalizeTicker(ticker);
+  return (
+    /^[A-Z0-9-]+$/.test(normalized) &&
+    !YAHOO_SYMBOL_ALIASES[normalized]
+  );
 }
 
 function mergeTickerFactFallbacks(
@@ -382,12 +402,17 @@ async function fetchYahooTickerFactBySymbol(ticker: string, yahooSymbol: string)
     fetchYahooSummary(yahooSymbol),
     fetchYahooChart(yahooSymbol),
   ]);
+  const tiingoPerformance = chart.perf1M === null || chart.perf12M === null
+    ? await fetchTiingoPerformance(ticker)
+    : { perf1M: null, perf12M: null };
 
   if (
     !summary.company &&
     !summary.sector &&
     !summary.industry &&
     !chart.company &&
+    tiingoPerformance.perf1M === null &&
+    tiingoPerformance.perf12M === null &&
     chart.perf1M === null &&
     chart.perf12M === null
   ) {
@@ -409,8 +434,8 @@ async function fetchYahooTickerFactBySymbol(ticker: string, yahooSymbol: string)
     sector,
     industry,
     theme: industry ?? sector ?? "Unknown",
-    perf1M: chart.perf1M ?? fallback?.perf1M ?? null,
-    perf12M: chart.perf12M,
+    perf1M: chart.perf1M ?? tiingoPerformance.perf1M ?? fallback?.perf1M ?? null,
+    perf12M: chart.perf12M ?? tiingoPerformance.perf12M,
   };
 }
 
@@ -497,6 +522,44 @@ async function fetchYahooChart(ticker: string): Promise<{
     };
   } catch {
     return { company: null, perf1M: null, perf12M: null };
+  }
+}
+
+async function fetchTiingoPerformance(ticker: string): Promise<{
+  perf1M: number | null;
+  perf12M: number | null;
+}> {
+  const token = process.env.TIINGO_API_TOKEN?.trim() || process.env.TIINGO_TOKEN?.trim();
+  if (!token || !isTiingoEodCandidate(ticker)) {
+    return { perf1M: null, perf12M: null };
+  }
+
+  try {
+    const res = await fetch(
+      `https://api.tiingo.com/tiingo/daily/${encodeURIComponent(normalizeTicker(ticker).toLowerCase())}/prices?startDate=${dateDaysAgo(TIINGO_LOOKBACK_DAYS)}`,
+      {
+        headers: {
+          accept: "application/json",
+          authorization: `Token ${token}`,
+        },
+        cache: "no-store",
+      },
+    );
+    if (!res.ok) return { perf1M: null, perf12M: null };
+    const body = (await res.json()) as TiingoPriceRow[];
+    const closes = compactNumbers(
+      body
+        .slice()
+        .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
+        .map((row) => row.adjClose ?? row.close ?? null),
+    );
+
+    return {
+      perf1M: percentFromLookback(closes, 21),
+      perf12M: percentFromLookback(closes, Math.min(252, closes.length - 1)),
+    };
+  } catch {
+    return { perf1M: null, perf12M: null };
   }
 }
 

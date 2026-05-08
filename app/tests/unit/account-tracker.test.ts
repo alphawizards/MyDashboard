@@ -3,6 +3,7 @@ import {
   buildAccountTickerPerformanceRows,
   buildTickerMentionCounts,
   getYahooFinanceUrl,
+  isTiingoEodCandidate,
   resolveYahooSymbolCandidates,
   shouldRefreshTickerFact,
 } from "@/lib/stocks/account-tracker";
@@ -100,6 +101,14 @@ describe("account stock tracker", () => {
     expect(getYahooFinanceUrl("AAOI")).toBe("https://finance.yahoo.com/quote/AAOI");
     expect(getYahooFinanceUrl("SIVE")).toBe("https://finance.yahoo.com/quote/SIVE.ST");
     expect(getYahooFinanceUrl("HPS.A")).toBe("https://finance.yahoo.com/quote/HPS-A.TO");
+  });
+
+  it("uses Tiingo EOD only for US-style tickers without Yahoo exchange aliases", () => {
+    expect(isTiingoEodCandidate("AAPL")).toBe(true);
+    expect(isTiingoEodCandidate("AAOI")).toBe(true);
+    expect(isTiingoEodCandidate("SIVE")).toBe(false);
+    expect(isTiingoEodCandidate("SOI")).toBe(false);
+    expect(isTiingoEodCandidate("HPS.A")).toBe(false);
   });
 
   it("refreshes missing or stale Yahoo facts while reusing fresh cache rows", () => {
