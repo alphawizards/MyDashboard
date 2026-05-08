@@ -64,8 +64,31 @@ type YahooChartResponse = {
   };
 };
 
+const YAHOO_SYMBOL_ALIASES: Record<string, readonly string[]> = {
+  "HPS.A": ["HPS-A.TO"],
+  IQE: ["IQE.L"],
+  LPK: ["LPK.DE"],
+  LPKF: ["LPK.DE"],
+  SIVE: ["SIVE.ST"],
+  SOI: ["SOI.PA"],
+};
+
 function normalizeTicker(ticker: string): string {
   return ticker.trim().replace(/^\$/, "").toUpperCase();
+}
+
+export function resolveYahooSymbolCandidates(ticker: string): string[] {
+  const normalized = normalizeTicker(ticker);
+  const candidates = [
+    normalized,
+    ...(YAHOO_SYMBOL_ALIASES[normalized] ?? []),
+  ];
+
+  if (normalized.includes(".")) {
+    candidates.push(normalized.replace(".", "-"));
+  }
+
+  return [...new Set(candidates.filter(Boolean))];
 }
 
 function toNumber(value: string | number | null): number | null {
@@ -94,6 +117,7 @@ function compactNumbers(values: Array<number | null> | undefined): number[] {
 }
 
 function percentFromLookback(values: number[], lookback: number): number | null {
+  if (values.length <= lookback) return null;
   const current = values.at(-1);
   const prior = values.at(-lookback);
   if (!current || !prior) return null;
@@ -197,10 +221,33 @@ export async function refreshTickerFacts(tickers: readonly string[]): Promise<Re
 }
 
 async function fetchYahooTickerFact(ticker: string): Promise<TickerFact | null> {
+  const candidates = resolveYahooSymbolCandidates(ticker);
+  for (const yahooSymbol of candidates) {
+    const fact = await fetchYahooTickerFactBySymbol(ticker, yahooSymbol);
+    if (fact) {
+      return fact;
+    }
+  }
+
+  return null;
+}
+
+async function fetchYahooTickerFactBySymbol(ticker: string, yahooSymbol: string): Promise<TickerFact | null> {
   const [summary, chart] = await Promise.all([
-    fetchYahooSummary(ticker),
-    fetchYahooChart(ticker),
+    fetchYahooSummary(yahooSymbol),
+    fetchYahooChart(yahooSymbol),
   ]);
+
+  if (
+    !summary.company &&
+    !summary.sector &&
+    !summary.industry &&
+    !chart.company &&
+    chart.perf1M === null &&
+    chart.perf12M === null
+  ) {
+    return null;
+  }
 
   const fallback = stocks.find((stock) => stock.ticker === ticker);
   const company =

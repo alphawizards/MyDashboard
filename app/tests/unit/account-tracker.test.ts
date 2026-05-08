@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   buildAccountTickerPerformanceRows,
   buildTickerMentionCounts,
+  resolveYahooSymbolCandidates,
 } from "@/lib/stocks/account-tracker";
 import type { Tweet } from "@/app/lib/types";
 
@@ -83,5 +84,12 @@ describe("account stock tracker", () => {
       expect.objectContaining({ ticker: "AAOI", company: "Unknown", theme: "Unknown" }),
       expect.objectContaining({ ticker: "SIVE", company: "Unknown", theme: "Unknown" }),
     ]);
+  });
+
+  it("resolves Serenity tickers that need Yahoo exchange or class suffixes", () => {
+    expect(resolveYahooSymbolCandidates("SIVE")).toEqual(["SIVE", "SIVE.ST"]);
+    expect(resolveYahooSymbolCandidates("SOI")).toEqual(["SOI", "SOI.PA"]);
+    expect(resolveYahooSymbolCandidates("HPS.A")).toEqual(["HPS.A", "HPS-A.TO", "HPS-A"]);
+    expect(resolveYahooSymbolCandidates("$AAOI")).toEqual(["AAOI"]);
   });
 });
