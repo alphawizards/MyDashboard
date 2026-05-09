@@ -353,8 +353,7 @@ function RefreshAuditPanel({
 
   return (
     <section className="refresh-state" aria-live="polite">
-      <strong>Refresh summary</strong>{" "}
-      <Link href="/feed/refresh-log">View full log</Link>
+      <strong>Refresh summary</strong>
       <span>{summary}</span>
       <div className="refresh-audit-list">
         {audit.accounts.map((account) => {
