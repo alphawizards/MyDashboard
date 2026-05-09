@@ -496,6 +496,18 @@ function parseJsonStringArray(value: string[] | string | null): string[] {
   }
 }
 
+export async function getLastXRefreshAudit(): Promise<XRefreshAuditSummary | null> {
+  const runs = await getXRefreshLogRuns(1);
+  const run = runs[0];
+  if (!run) return null;
+  return {
+    runId: run.id,
+    triggeredBy: run.triggeredBy,
+    totalNewTweets: run.totalNewTweets,
+    accounts: run.accounts,
+  };
+}
+
 export async function upsertTrackedAccounts(authors: readonly AuthorProfile[]): Promise<void> {
   if (!authors.length) return;
 
