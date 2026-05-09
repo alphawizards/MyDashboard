@@ -3,9 +3,11 @@ import { getTrackedAuthors } from '@/lib/accounts/server';
 import type { Tweet } from '@/app/lib/types';
 import {
   getCachedAccountRows,
+  normalizeTickerMention,
   upsertTrackedAccounts,
   upsertTweetsForAuthor,
   type CacheableTweet,
+  type XAccountRefreshLogEvent,
 } from '@/lib/x/cache';
 
 type XEndpointDiagnostic = {
@@ -23,6 +25,8 @@ export type XAuthorRefreshDiagnostic = {
 };
 
 export type XRefreshDiagnostics = Record<string, XAuthorRefreshDiagnostic>;
+
+export type XRefreshAuditEvent = XAccountRefreshLogEvent;
 
 export function isXConfigured(): boolean {
   return Boolean(process.env.X_BEARER_TOKEN);
@@ -204,6 +208,7 @@ export async function fetchAllTweets(): Promise<Record<string, Tweet[]>> {
 export async function fetchAllTweetsWithDiagnostics(): Promise<{
   tweetsByAuthor: Record<string, Tweet[]>;
   diagnostics: XRefreshDiagnostics;
+  accountEvents: XRefreshAuditEvent[];
 }> {
   const authors = getTrackedAuthors();
   await upsertTrackedAccounts(authors);
@@ -224,7 +229,13 @@ export async function fetchAllTweetsWithDiagnostics(): Promise<{
         if (author && result.userId) {
           await upsertTweetsForAuthor(author, result.userId, result.tweets);
         }
-        return [key, result] as const;
+        return [key, result, buildAccountRefreshEvent({
+          key,
+          handle,
+          previousLastTweetId: account?.last_tweet_id ?? null,
+          tweets: result.tweets,
+          diagnostic: result.diagnostic,
+        })] as const;
       }
     )
   );
@@ -236,5 +247,60 @@ export async function fetchAllTweetsWithDiagnostics(): Promise<{
     diagnostics: Object.fromEntries(
       entries.map(([key, result]) => [key, result.diagnostic])
     ) as XRefreshDiagnostics,
+    accountEvents: entries.map(([, , event]) => event),
   };
+}
+
+function buildAccountRefreshEvent(input: {
+  key: string;
+  handle: string;
+  previousLastTweetId: string | null;
+  tweets: readonly CacheableTweet[];
+  diagnostic: XAuthorRefreshDiagnostic;
+}): XRefreshAuditEvent {
+  const tweetError =
+    input.diagnostic.tweets?.error ??
+    (!input.diagnostic.userLookup.ok ? input.diagnostic.userLookup.error : undefined);
+  const newTweetIds = input.tweets.map((tweet) => tweet.id);
+  const newTickers = [
+    ...new Set(
+      input.tweets.flatMap((tweet) =>
+        (tweet.cashtags ?? []).map(normalizeTickerMention).filter(Boolean),
+      ),
+    ),
+  ].sort((a, b) => a.localeCompare(b));
+  const newLastTweetId = getNewestTweetId(newTweetIds) ?? input.previousLastTweetId;
+  const status: XRefreshAuditEvent["status"] = tweetError
+    ? "failed"
+    : input.tweets.length > 0
+      ? "updated"
+      : "no_new_tweets";
+
+  return {
+    authorKey: input.key,
+    handle: input.handle,
+    previousLastTweetId: input.previousLastTweetId,
+    newLastTweetId,
+    newTweetCount: input.tweets.length,
+    newTweetIds,
+    newTickers,
+    status,
+    ...(tweetError ? { error: tweetError } : {}),
+  };
+}
+
+function getNewestTweetId(ids: readonly string[]): string | null {
+  if (!ids.length) return null;
+
+  return [...ids].sort(compareTweetIdsDesc)[0] ?? null;
+}
+
+function compareTweetIdsDesc(a: string, b: string): number {
+  try {
+    const left = BigInt(a);
+    const right = BigInt(b);
+    return right > left ? 1 : right < left ? -1 : 0;
+  } catch {
+    return b.localeCompare(a);
+  }
 }

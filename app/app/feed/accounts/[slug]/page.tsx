@@ -85,6 +85,9 @@ export default async function AccountPage({ params }: AccountPageProps) {
           <Link className="nav-btn" href="/">
             Home
           </Link>
+          <Link className="nav-btn" href="/feed/refresh-log">
+            Logs
+          </Link>
         </nav>
       </header>
 

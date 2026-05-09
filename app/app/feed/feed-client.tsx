@@ -20,6 +20,23 @@ type FeedClientProps = {
   accountCreationEnabled?: boolean;
 };
 
+type RefreshAuditAccount = {
+  authorKey: string;
+  handle: string;
+  newTweetCount: number;
+  newTweetIds: string[];
+  newTickers: string[];
+  status: "updated" | "no_new_tweets" | "failed" | "skipped";
+  error?: string;
+};
+
+type RefreshAuditSummary = {
+  runId: number | null;
+  triggeredBy: "button" | "cron" | "unknown";
+  totalNewTweets: number;
+  accounts: RefreshAuditAccount[];
+};
+
 function decodeEntities(text: string) {
   return text
     .replace(/&amp;/g, "&")
@@ -112,6 +129,7 @@ export function FeedClient({
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshTime, setLastRefreshTime] = useState(initialLastRefreshTime);
+  const [refreshAudit, setRefreshAudit] = useState<RefreshAuditSummary | null>(null);
   const [tickerFilter, setTickerFilter] = useState<string | null>(null);
 
   async function handleRefresh() {
@@ -119,10 +137,14 @@ export function FeedClient({
 
     setRefreshing(true);
     try {
-      const res = await fetch("/api/refresh/all", { method: "POST" });
+      const res = await fetch("/api/refresh/all", {
+        method: "POST",
+        headers: { "x-refresh-trigger": "button" },
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const data = (await res.json()) as { ok?: boolean; lastRefreshTime?: string };
+      const data = (await res.json()) as { ok?: boolean; lastRefreshTime?: string; audit?: RefreshAuditSummary };
+      setRefreshAudit(data.audit ?? null);
       if (data.ok && data.lastRefreshTime) {
         setLastRefreshTime(formatRefreshTime(data.lastRefreshTime));
         router.refresh();
@@ -246,6 +268,8 @@ export function FeedClient({
         </span>
       </div>
 
+      {refreshAudit ? <RefreshAuditPanel audit={refreshAudit} authorByKey={authorByKey} /> : null}
+
       {accountCreationEnabled && <AddAccountForm />}
 
       <AnalystTable authors={authors} tweetsByAuthor={tweetsByAuthor} />
@@ -309,6 +333,44 @@ export function FeedClient({
         </>
       )}
     </>
+  );
+}
+
+function RefreshAuditPanel({
+  audit,
+  authorByKey,
+}: {
+  audit: RefreshAuditSummary;
+  authorByKey: Record<string, AuthorProfile>;
+}) {
+  const updatedAccounts = audit.accounts.filter((account) => account.newTweetCount > 0);
+  const failedAccounts = audit.accounts.filter((account) => account.status === "failed");
+  const summary = [
+    `${audit.totalNewTweets} new tweet${audit.totalNewTweets === 1 ? "" : "s"}`,
+    `${updatedAccounts.length} account${updatedAccounts.length === 1 ? "" : "s"} updated`,
+    failedAccounts.length ? `${failedAccounts.length} failed` : null,
+  ].filter(Boolean).join(" · ");
+
+  return (
+    <section className="refresh-state" aria-live="polite">
+      <strong>Refresh summary</strong>{" "}
+      <Link href="/feed/refresh-log">View full log</Link>
+      <span>{summary}</span>
+      <div className="refresh-audit-list">
+        {audit.accounts.map((account) => {
+          const author = authorByKey[account.authorKey];
+          const label = author?.shortName ?? account.handle;
+          const tickers = account.newTickers.length ? ` · ${account.newTickers.join(", ")}` : "";
+          const error = account.error ? ` · ${account.error}` : "";
+
+          return (
+            <span key={account.authorKey}>
+              {label}: {account.newTweetCount} new{tickers}{error}
+            </span>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 

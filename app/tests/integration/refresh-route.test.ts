@@ -76,6 +76,18 @@ describe("/api/refresh/all", () => {
         a: { handle: "aleabitoreddit", userLookup: { ok: true, status: 200 }, tweets: { ok: true, status: 200, returned: 1 } },
         b: { handle: "BryzonX", userLookup: { ok: true, status: 200 }, tweets: { ok: true, status: 200, returned: 1 } },
       },
+      accountEvents: [
+        {
+          authorKey: "s",
+          handle: "michaelsikand",
+          previousLastTweetId: "100",
+          newLastTweetId: "101",
+          newTweetCount: 1,
+          newTweetIds: ["101"],
+          newTickers: ["AMD"],
+          status: "updated",
+        },
+      ],
     });
 
     const { POST } = await import("../../app/api/refresh/all/route");
@@ -90,6 +102,20 @@ describe("/api/refresh/all", () => {
       fetched: { s: 1, w: 2, a: 1, b: 1 },
     });
     expect(body.diagnostics.a.handle).toBe("aleabitoreddit");
+    expect(body.audit).toMatchObject({
+      runId: null,
+      triggeredBy: "unknown",
+      totalNewTweets: 5,
+      accounts: [
+        {
+          authorKey: "s",
+          handle: "michaelsikand",
+          newTweetCount: 1,
+          newTickers: ["AMD"],
+          status: "updated",
+        },
+      ],
+    });
     expect(revalidatePath).toHaveBeenCalledWith("/feed");
     expect(revalidatePath).toHaveBeenCalledWith("/watchlist");
     expect(body.providers.farside.status).toBe("ok");
