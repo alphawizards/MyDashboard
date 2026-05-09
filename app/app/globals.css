@@ -858,6 +858,14 @@ a.cashtag-tag:focus-visible,
   text-align: right;
 }
 
+.refresh-audit-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  justify-content: flex-end;
+  margin-top: 6px;
+}
+
 .placeholder-panel {
   border-style: dashed;
 }
