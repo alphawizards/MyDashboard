@@ -4,8 +4,12 @@ import { buildAccountCompleteTweetMap, initialsFromName } from "@/app/lib/accoun
 import { buildTickerCounts, buildTickerOverlap } from "@/app/lib/overlap";
 import { tweetsByAuthor as staticTweetsByAuthor } from "@/app/lib/static-data";
 import { getAuthorBySlug, getTrackedAuthors } from "@/lib/accounts/server";
-import { getCachedTweetsByAuthor } from "@/lib/x/cache";
-import { getAccountTickerPerformanceRows, type AccountTickerPerformanceRow } from "@/lib/stocks/account-tracker";
+import { getAccountTickerCountsFromDb, getCachedTweetsByAuthor, getTickerMentionGroupsFromDb } from "@/lib/x/cache";
+import {
+  getAccountTickerPerformanceRows,
+  getAccountTickerPerformanceRowsFromCounts,
+  type AccountTickerPerformanceRow,
+} from "@/lib/stocks/account-tracker";
 
 type AccountPageProps = {
   params: Promise<{ slug: string }>;
@@ -23,7 +27,11 @@ export default async function AccountPage({ params }: AccountPageProps) {
   let tweetsByAuthor = buildAccountCompleteTweetMap(authors, staticTweetsByAuthor);
   let dataSource: "cached" | "static" = "static";
 
-  const cached = await getCachedTweetsByAuthor(authors);
+  const [cached, cachedTickerCounts, cachedMentionGroups] = await Promise.all([
+    getCachedTweetsByAuthor(authors),
+    getAccountTickerCountsFromDb(author.key),
+    getTickerMentionGroupsFromDb(authors),
+  ]);
   const totalCached = cached ? Object.values(cached).reduce((sum, tweets) => sum + tweets.length, 0) : 0;
   if (cached && totalCached > 0) {
     tweetsByAuthor = buildAccountCompleteTweetMap(authors, cached);
@@ -31,10 +39,30 @@ export default async function AccountPage({ params }: AccountPageProps) {
   }
 
   const accountTweets = tweetsByAuthor[author.key] ?? [];
-  const tickerPerformanceRows = await getAccountTickerPerformanceRows(accountTweets);
-  const tickerCounts = buildTickerCounts(accountTweets);
+  const tickerCounts = cachedTickerCounts && Object.keys(cachedTickerCounts).length
+    ? cachedTickerCounts
+    : buildTickerCounts(accountTweets);
+  const tickerPerformanceRows = cachedTickerCounts && Object.keys(cachedTickerCounts).length
+    ? await getAccountTickerPerformanceRowsFromCounts(cachedTickerCounts)
+    : await getAccountTickerPerformanceRows(accountTweets);
   const colorByKey = Object.fromEntries(authors.map((item) => [item.key, item.color]));
-  const overlap = buildTickerOverlap(tweetsByAuthor, colorByKey);
+  const hasCachedMentionGroups =
+    cachedMentionGroups &&
+    (cachedMentionGroups.shared.length || cachedMentionGroups.uniqueByAuthor.some((group) => group.tickers.length));
+  const overlap = hasCachedMentionGroups
+    ? [
+        ...cachedMentionGroups.shared,
+        ...cachedMentionGroups.uniqueByAuthor.flatMap((group) =>
+          group.tickers.map((ticker) => ({
+            ticker: ticker.ticker,
+            authors: [{ who: ticker.who, count: ticker.count }],
+            total: ticker.count,
+            shared: false,
+            color: ticker.color,
+          })),
+        ),
+      ]
+    : buildTickerOverlap(tweetsByAuthor, colorByKey);
   const sharedForAccount = overlap.filter((row) =>
     row.shared && row.authors.some((item) => item.who === author.key),
   );

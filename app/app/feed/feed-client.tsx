@@ -16,6 +16,7 @@ type FeedClientProps = {
   authors: readonly AuthorProfile[];
   tweetsByAuthor: Record<string, readonly Tweet[]>;
   lastRefreshTime: string;
+  tickerMentionGroups?: ReturnType<typeof buildTickerMentionGroups> | null;
   accountCreationEnabled?: boolean;
 };
 
@@ -98,7 +99,13 @@ function TickerLink({
   );
 }
 
-export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLastRefreshTime, accountCreationEnabled = false }: FeedClientProps) {
+export function FeedClient({
+  authors,
+  tweetsByAuthor,
+  lastRefreshTime: initialLastRefreshTime,
+  tickerMentionGroups: initialTickerMentionGroups = null,
+  accountCreationEnabled = false,
+}: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
   const [search, setSearch] = useState("");
@@ -145,11 +152,18 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
         .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1)),
     [tweetsByAuthor],
   );
-  const tickerGroups = useMemo(() => buildTickerMentionGroups(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
+  const fallbackTickerGroups = useMemo(() => buildTickerMentionGroups(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
+  const tickerGroups = initialTickerMentionGroups ?? fallbackTickerGroups;
   const sharedOverlap = tickerGroups.shared;
   const activeAuthor = tab !== "all" && tab !== "overlap" ? tab : null;
-  const activeTweets = activeAuthor ? tweetsByAuthor[activeAuthor] ?? [] : allTweets;
-  const sourceTweets = activeAuthor ? activeTweets.map((tweet) => ({ ...tweet, who: activeAuthor })) : allTweets;
+  const activeTweets = useMemo(
+    () => (activeAuthor ? tweetsByAuthor[activeAuthor] ?? [] : allTweets),
+    [activeAuthor, allTweets, tweetsByAuthor],
+  );
+  const sourceTweets = useMemo(
+    () => (activeAuthor ? activeTweets.map((tweet) => ({ ...tweet, who: activeAuthor })) : allTweets),
+    [activeAuthor, activeTweets, allTweets],
+  );
   const visibleTweets = sourceTweets.filter((tweet) => {
     const q = search.trim().toLowerCase();
     if (filter === "tickers" && tweet.cashtags.length === 0) return false;
@@ -160,7 +174,29 @@ export function FeedClient({ authors, tweetsByAuthor, lastRefreshTime: initialLa
     }
     return true;
   });
-  const activeTickerCounts = buildTickerCounts(activeTweets);
+  const activeTickerCounts = useMemo(() => {
+    if (!initialTickerMentionGroups) return buildTickerCounts(activeTweets);
+
+    if (!activeAuthor) {
+      return Object.fromEntries([
+        ...tickerGroups.shared.map((row) => [row.ticker, row.total] as const),
+        ...tickerGroups.uniqueByAuthor.flatMap((group) =>
+          group.tickers.map((ticker) => [ticker.ticker, ticker.count] as const),
+        ),
+      ]);
+    }
+
+    const counts: Record<string, number> = {};
+    for (const row of tickerGroups.shared) {
+      const author = row.authors.find((item) => item.who === activeAuthor);
+      if (author) counts[row.ticker] = author.count;
+    }
+    const uniqueGroup = tickerGroups.uniqueByAuthor.find((group) => group.who === activeAuthor);
+    for (const ticker of uniqueGroup?.tickers ?? []) {
+      counts[ticker.ticker] = ticker.count;
+    }
+    return counts;
+  }, [activeAuthor, activeTweets, initialTickerMentionGroups, tickerGroups]);
 
   function selectTab(next: Tab) {
     setTab(next);
