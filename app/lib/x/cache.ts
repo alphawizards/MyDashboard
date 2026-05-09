@@ -12,6 +12,27 @@ export type CachedAccountRow = {
   last_tweet_id: string | null;
 };
 
+export type XRefreshTrigger = "button" | "cron" | "unknown";
+
+export type XAccountRefreshLogEvent = {
+  authorKey: string;
+  handle: string;
+  previousLastTweetId: string | null;
+  newLastTweetId: string | null;
+  newTweetCount: number;
+  newTweetIds: string[];
+  newTickers: string[];
+  status: "updated" | "no_new_tweets" | "failed" | "skipped";
+  error?: string;
+};
+
+export type XRefreshAuditSummary = {
+  runId: number | null;
+  triggeredBy: XRefreshTrigger;
+  totalNewTweets: number;
+  accounts: XAccountRefreshLogEvent[];
+};
+
 type TweetRow = {
   author_key: string;
   id: string;
@@ -32,6 +53,10 @@ type TickerMentionCountRow = {
 
 type LastRefreshRow = {
   last_refreshed_at: string | null;
+};
+
+type CreatedRefreshRunRow = {
+  id: string | number;
 };
 
 function formatDate(iso: string): string {
@@ -226,6 +251,103 @@ export async function getTickerMentionGroupsFromDb(
     return buildMentionGroups(rows, authors);
   } catch {
     return null;
+  }
+}
+
+export async function createXRefreshRun(input: {
+  requestId: string;
+  triggeredBy: XRefreshTrigger;
+  startedAtIso: string;
+}): Promise<number | null> {
+  try {
+    const rows = await queryRows<CreatedRefreshRunRow>(
+      `
+        insert into x_refresh_runs (request_id, triggered_by, started_at)
+        values ($1,$2,$3)
+        returning id
+      `,
+      [input.requestId, input.triggeredBy, input.startedAtIso],
+    );
+    const id = rows?.[0]?.id;
+    const parsed = typeof id === "number" ? id : Number(id);
+    return Number.isFinite(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function completeXRefreshRun(input: {
+  runId: number | null;
+  finishedAtIso: string;
+  ok: boolean;
+  mode: string;
+  message: string;
+  totalNewTweets: number;
+  diagnostics?: unknown;
+}): Promise<void> {
+  if (input.runId === null) return;
+
+  try {
+    await queryRows(
+      `
+        update x_refresh_runs
+        set finished_at = $2,
+            ok = $3,
+            mode = $4,
+            message = $5,
+            total_new_tweets = $6,
+            diagnostics = $7::jsonb
+        where id = $1
+      `,
+      [
+        input.runId,
+        input.finishedAtIso,
+        input.ok,
+        input.mode,
+        input.message,
+        input.totalNewTweets,
+        JSON.stringify(input.diagnostics ?? null),
+      ],
+    );
+  } catch {
+    // Audit logging is best-effort and must not fail the refresh itself.
+  }
+}
+
+export async function insertXAccountRefreshEvents(
+  runId: number | null,
+  events: readonly XAccountRefreshLogEvent[],
+): Promise<void> {
+  if (runId === null || !events.length) return;
+
+  try {
+    await Promise.all(
+      events.map((event) =>
+        queryRows(
+          `
+            insert into x_account_refresh_events (
+              refresh_run_id, author_key, handle, previous_last_tweet_id, new_last_tweet_id,
+              new_tweet_count, new_tweet_ids, new_tickers, status, error
+            )
+            values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10)
+          `,
+          [
+            runId,
+            event.authorKey,
+            event.handle,
+            event.previousLastTweetId,
+            event.newLastTweetId,
+            event.newTweetCount,
+            JSON.stringify(event.newTweetIds),
+            JSON.stringify(event.newTickers),
+            event.status,
+            event.error ?? null,
+          ],
+        ),
+      ),
+    );
+  } catch {
+    // Audit logging is best-effort and must not fail the refresh itself.
   }
 }
 

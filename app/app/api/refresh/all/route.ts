@@ -7,6 +7,14 @@ import { refreshFarsideBtcFlows } from "@/app/lib/watchlist/farside";
 import { getTrackedAuthors } from "@/lib/accounts/server";
 import { logDatabaseConfigOnce } from "@/lib/db-config";
 import { createRequestId, logger, serializeError } from "@/lib/logger";
+import {
+  completeXRefreshRun,
+  createXRefreshRun,
+  insertXAccountRefreshEvents,
+  type XAccountRefreshLogEvent,
+  type XRefreshAuditSummary,
+  type XRefreshTrigger,
+} from "@/lib/x/cache";
 import { fetchAllTweetsWithDiagnostics, isXConfigured } from "@/lib/x/server";
 import type { XRefreshDiagnostics } from "@/lib/x/server";
 import { buildTickerMentionCounts, refreshTickerFacts } from "@/lib/stocks/account-tracker";
@@ -59,12 +67,35 @@ async function refreshAccountTickerFacts(
   return { accounts, source, tickers: tickers.length };
 }
 
+function getRefreshTrigger(request: Request): XRefreshTrigger {
+  const trigger = request.headers.get("x-refresh-trigger");
+  if (trigger === "button" || trigger === "cron") return trigger;
+  return "unknown";
+}
+
+function buildSkippedAccountEvents(status: XAccountRefreshLogEvent["status"], error?: string): XAccountRefreshLogEvent[] {
+  return getTrackedAuthors().map((author) => ({
+    authorKey: author.key,
+    handle: author.handle,
+    previousLastTweetId: null,
+    newLastTweetId: null,
+    newTweetCount: 0,
+    newTweetIds: [],
+    newTickers: [],
+    status,
+    ...(error ? { error } : {}),
+  }));
+}
+
 export async function POST(request: Request) {
   const requestId = createRequestId(request);
   const startedAt = Date.now();
+  const startedAtIso = new Date(startedAt).toISOString();
   const route = "/api/refresh/all";
+  const triggeredBy = getRefreshTrigger(request);
+  let refreshRunId: number | null = null;
 
-  logger.info("refresh.start", { requestId, route });
+  logger.info("refresh.start", { requestId, route, triggeredBy });
 
   try {
     const configuredSecret = process.env.REFRESH_SHARED_SECRET;
@@ -90,6 +121,7 @@ export async function POST(request: Request) {
     });
 
     logDatabaseConfigOnce({ requestId });
+    refreshRunId = await createXRefreshRun({ requestId, triggeredBy, startedAtIso });
 
     const lastRefreshTime = new Date().toISOString();
     let mode = "static";
@@ -97,6 +129,7 @@ export async function POST(request: Request) {
     let fetched: Record<string, number> | undefined;
     let diagnostics: XRefreshDiagnostics | undefined;
     let yahoo: { accounts: number; source: "live" | "mixed" | "static"; tickers: number } | undefined;
+    let accountEvents: XAccountRefreshLogEvent[] = [];
 
     logger.info("refresh.farside.start", { requestId });
     const farside = await refreshFarsideBtcFlows();
@@ -109,11 +142,13 @@ export async function POST(request: Request) {
     if (isXConfigured()) {
       logger.info("refresh.x.start", { requestId });
       try {
-        const { tweetsByAuthor, diagnostics: xDiagnostics } = await fetchAllTweetsWithDiagnostics();
+        const { tweetsByAuthor, diagnostics: xDiagnostics, accountEvents: xAccountEvents } = await fetchAllTweetsWithDiagnostics();
         diagnostics = xDiagnostics;
+        accountEvents = xAccountEvents ?? [];
         fetched = Object.fromEntries(
           Object.entries(tweetsByAuthor).map(([key, tweets]) => [key, tweets.length]),
         );
+        await insertXAccountRefreshEvents(refreshRunId, accountEvents);
         yahoo = await refreshAccountTickerFacts(requestId, tweetsByAuthor);
         mode = "live";
         message = "Feed cache revalidated after live X fetch.";
@@ -122,10 +157,14 @@ export async function POST(request: Request) {
         mode = "live-fallback";
         message = err instanceof Error ? err.message : "Live X refresh failed; feed cache was still revalidated.";
         logger.warn("refresh.x.failure", { requestId, error: serializeError(err) });
+        accountEvents = buildSkippedAccountEvents("failed", message);
+        await insertXAccountRefreshEvents(refreshRunId, accountEvents);
         yahoo = await refreshAccountTickerFacts(requestId);
       }
     } else {
       logger.info("refresh.x.skipped", { requestId, reason: "not_configured" });
+      accountEvents = buildSkippedAccountEvents("skipped", "X_BEARER_TOKEN is not configured.");
+      await insertXAccountRefreshEvents(refreshRunId, accountEvents);
       yahoo = await refreshAccountTickerFacts(requestId);
     }
 
@@ -138,7 +177,23 @@ export async function POST(request: Request) {
     logger.info("refresh.revalidate.success", { requestId });
 
     const durationMs = Date.now() - startedAt;
-    logger.info("refresh.success", { requestId, route, mode, durationMs });
+    const totalNewTweets = Object.values(fetched ?? {}).reduce((sum, count) => sum + count, 0);
+    const audit: XRefreshAuditSummary = {
+      runId: refreshRunId,
+      triggeredBy,
+      totalNewTweets,
+      accounts: accountEvents,
+    };
+    await completeXRefreshRun({
+      runId: refreshRunId,
+      finishedAtIso: new Date().toISOString(),
+      ok: true,
+      mode,
+      message,
+      totalNewTweets,
+      diagnostics,
+    });
+    logger.info("refresh.success", { requestId, route, mode, durationMs, audit });
 
     return NextResponse.json({
       ok: true,
@@ -150,6 +205,7 @@ export async function POST(request: Request) {
       providers: {
         farside: farside.status,
       },
+      audit,
       ...(yahoo ? { yahoo } : {}),
       ...(fetched ? { fetched } : {}),
       ...(diagnostics ? { diagnostics } : {}),
@@ -161,6 +217,14 @@ export async function POST(request: Request) {
       route,
       durationMs,
       error: serializeError(err),
+    });
+    await completeXRefreshRun({
+      runId: refreshRunId,
+      finishedAtIso: new Date().toISOString(),
+      ok: false,
+      mode: "failed",
+      message: err instanceof Error ? err.message : "Refresh failed.",
+      totalNewTweets: 0,
     });
 
     return NextResponse.json(
