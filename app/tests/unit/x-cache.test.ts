@@ -92,4 +92,63 @@ describe("X cache ticker mentions", () => {
     expect(insertMentionCalls).toHaveLength(2);
     expect(insertMentionCalls.map(([, params]) => params?.[2]).sort()).toEqual(["AMD", "HPS.A"]);
   });
+
+  it("loads refresh log runs with account events", async () => {
+    queryRows
+      .mockResolvedValueOnce([
+        {
+          id: "7",
+          request_id: "req-7",
+          triggered_by: "button",
+          started_at: "2026-05-09T05:52:00.000Z",
+          finished_at: "2026-05-09T05:53:00.000Z",
+          ok: true,
+          mode: "live",
+          message: "Feed cache revalidated after live X fetch.",
+          total_new_tweets: 2,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          refresh_run_id: "7",
+          author_key: "alpha",
+          handle: "alpha",
+          previous_last_tweet_id: "100",
+          new_last_tweet_id: "102",
+          new_tweet_count: 2,
+          new_tweet_ids: ["101", "102"],
+          new_tickers: ["AMD", "MXL"],
+          status: "updated",
+          error: null,
+        },
+      ]);
+
+    const { getXRefreshLogRuns } = await import("@/lib/x/cache");
+
+    await expect(getXRefreshLogRuns()).resolves.toEqual([
+      {
+        id: 7,
+        requestId: "req-7",
+        triggeredBy: "button",
+        startedAt: "2026-05-09T05:52:00.000Z",
+        finishedAt: "2026-05-09T05:53:00.000Z",
+        ok: true,
+        mode: "live",
+        message: "Feed cache revalidated after live X fetch.",
+        totalNewTweets: 2,
+        accounts: [
+          {
+            authorKey: "alpha",
+            handle: "alpha",
+            previousLastTweetId: "100",
+            newLastTweetId: "102",
+            newTweetCount: 2,
+            newTweetIds: ["101", "102"],
+            newTickers: ["AMD", "MXL"],
+            status: "updated",
+          },
+        ],
+      },
+    ]);
+  });
 });

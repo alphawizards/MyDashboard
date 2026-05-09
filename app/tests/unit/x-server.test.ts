@@ -144,7 +144,7 @@ describe("X server client", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     const { fetchAllTweetsWithDiagnostics } = await import("../../lib/x/server");
-    const { tweetsByAuthor, diagnostics } = await fetchAllTweetsWithDiagnostics();
+    const { tweetsByAuthor, diagnostics, accountEvents } = await fetchAllTweetsWithDiagnostics();
     const requestedHandles = fetchMock.mock.calls
       .map(([input]) => String(input))
       .filter((url) => url.includes("/users/by/username/"))
@@ -158,6 +158,12 @@ describe("X server client", () => {
       b: 1,
     });
     expect(diagnostics.a.handle).toBe("aleabitoreddit");
+    expect(accountEvents).toEqual([
+      expect.objectContaining({ authorKey: "s", handle: "michaelsikand", newTweetCount: 1, newTickers: ["AMD"], status: "updated" }),
+      expect.objectContaining({ authorKey: "w", handle: "peterjwolff", newTweetCount: 1, newTickers: ["AMD"], status: "updated" }),
+      expect.objectContaining({ authorKey: "a", handle: "aleabitoreddit", newTweetCount: 1, newTickers: ["AMD"], status: "updated" }),
+      expect.objectContaining({ authorKey: "b", handle: "BryzonX", newTweetCount: 1, newTickers: ["AMD"], status: "updated" }),
+    ]);
   });
 
   it("derives live refresh handles from the configured authors", async () => {
