@@ -59,6 +59,9 @@ export default async function FeedPage() {
           <Link className="nav-btn" href="/portfolios">
             Portfolios
           </Link>
+          <Link className="nav-btn" href="/feed/refresh-log">
+            Refresh Log
+          </Link>
         </nav>
       </header>
       <FeedClient
