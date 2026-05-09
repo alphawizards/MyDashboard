@@ -81,6 +81,9 @@ export function WatchlistDashboard({ initialData }: { initialData: WatchlistDash
             <Link className="nav-btn" href="/portfolios">
               Portfolios
             </Link>
+            <Link className="nav-btn" href="/feed/refresh-log">
+              Logs
+            </Link>
           </nav>
           <button className="primary-action" disabled={refreshing} onClick={refreshData} type="button">
             {refreshing ? "Refreshing..." : "Refresh data"}

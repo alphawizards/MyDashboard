@@ -24,6 +24,9 @@ export default function PortfoliosPage() {
           <Link className="nav-btn" href="/feed">
             X Tracker
           </Link>
+          <Link className="nav-btn" href="/feed/refresh-log">
+            Logs
+          </Link>
         </nav>
       </header>
 

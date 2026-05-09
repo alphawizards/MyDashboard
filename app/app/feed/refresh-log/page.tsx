@@ -43,6 +43,15 @@ export default async function RefreshLogPage() {
           <Link className="nav-btn" href="/">
             Home
           </Link>
+          <Link className="nav-btn" href="/watchlist">
+            Watchlist
+          </Link>
+          <Link className="nav-btn" href="/portfolios">
+            Portfolios
+          </Link>
+          <Link className="nav-btn" href="/feed/refresh-log">
+            Logs
+          </Link>
         </nav>
       </header>
 
