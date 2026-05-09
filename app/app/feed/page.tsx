@@ -3,7 +3,7 @@ import { tweetsByAuthor as staticTweetsByAuthor } from "../lib/static-data";
 import { buildAccountCompleteTweetMap } from "../lib/accounts";
 import { getTrackedAuthors } from "@/lib/accounts/server";
 import { FeedClient } from "./feed-client";
-import { getCachedTweetsByAuthor, getLastXRefreshTime, getTickerMentionGroupsFromDb } from "@/lib/x/cache";
+import { getCachedTweetsByAuthor, getLastXRefreshAudit, getLastXRefreshTime, getTickerMentionGroupsFromDb } from "@/lib/x/cache";
 
 // Revalidate this page at most every 30 minutes in the background.
 // The Refresh button forces an immediate revalidation via /api/refresh/all.
@@ -16,10 +16,11 @@ export default async function FeedPage() {
   let lastRefreshTime = "Not available";
   let tickerMentionGroups = null;
 
-  const [cached, cachedLastRefreshTime, cachedMentionGroups] = await Promise.all([
+  const [cached, cachedLastRefreshTime, cachedMentionGroups, lastAudit] = await Promise.all([
     getCachedTweetsByAuthor(authorProfiles),
     getLastXRefreshTime(authorProfiles),
     getTickerMentionGroupsFromDb(authorProfiles),
+    getLastXRefreshAudit(),
   ]);
   const totalCached = cached ? Object.values(cached).reduce((sum, tweets) => sum + tweets.length, 0) : 0;
   if (cached && totalCached > 0) {
@@ -70,6 +71,8 @@ export default async function FeedPage() {
         lastRefreshTime={lastRefreshTime}
         tickerMentionGroups={tickerMentionGroups}
         accountCreationEnabled={!process.env.REFRESH_SHARED_SECRET}
+        refreshSecret={process.env.REFRESH_SHARED_SECRET ?? ""}
+        lastAudit={lastAudit}
       />
     </main>
   );
