@@ -8,6 +8,7 @@ import { useResizeObserver } from "../lib/use-resize-observer";
 import { AddAccountForm } from "./add-account-form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import type { RefreshFeedActionResult } from "./actions";
 
 type Tab = "all" | "overlap" | string;
 type Filter = "all" | "tickers" | "hot";
@@ -18,8 +19,8 @@ type FeedClientProps = {
   lastRefreshTime: string;
   tickerMentionGroups?: ReturnType<typeof buildTickerMentionGroups> | null;
   accountCreationEnabled?: boolean;
-  refreshSecret: string;
   lastAudit: RefreshAuditSummary | null;
+  refreshFeedAction: () => Promise<RefreshFeedActionResult>;
 };
 
 type RefreshAuditAccount = {
@@ -124,8 +125,8 @@ export function FeedClient({
   lastRefreshTime: initialLastRefreshTime,
   tickerMentionGroups: initialTickerMentionGroups = null,
   accountCreationEnabled = false,
-  refreshSecret,
   lastAudit,
+  refreshFeedAction,
 }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
@@ -143,19 +144,11 @@ export function FeedClient({
     setRefreshing(true);
     setRefreshError(null);
     try {
-      const headers: Record<string, string> = { "x-refresh-trigger": "button" };
-      if (refreshSecret) headers["x-refresh-secret"] = refreshSecret;
-
-      const res = await fetch("/api/refresh/all", {
-        method: "POST",
-        headers,
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error ?? `HTTP ${res.status}`);
+      const data = await refreshFeedAction();
+      if (data.status >= 400) {
+        throw new Error(data.error ?? `HTTP ${data.status}`);
       }
 
-      const data = (await res.json()) as { ok?: boolean; lastRefreshTime?: string; audit?: RefreshAuditSummary; message?: string; mode?: string };
       setRefreshAudit(data.audit ?? null);
       if (data.ok && data.lastRefreshTime) {
         setLastRefreshTime(formatRefreshTime(data.lastRefreshTime));

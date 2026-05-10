@@ -3,6 +3,7 @@ import { tweetsByAuthor as staticTweetsByAuthor } from "../lib/static-data";
 import { buildAccountCompleteTweetMap } from "../lib/accounts";
 import { getTrackedAuthors } from "@/lib/accounts/server";
 import { FeedClient } from "./feed-client";
+import { refreshFeedFromButton } from "./actions";
 import { getCachedTweetsByAuthor, getLastXRefreshAudit, getLastXRefreshTime, getTickerMentionGroupsFromDb } from "@/lib/x/cache";
 
 // Revalidate this page at most every 30 minutes in the background.
@@ -71,8 +72,8 @@ export default async function FeedPage() {
         lastRefreshTime={lastRefreshTime}
         tickerMentionGroups={tickerMentionGroups}
         accountCreationEnabled={!process.env.REFRESH_SHARED_SECRET}
-        refreshSecret={process.env.REFRESH_SHARED_SECRET ?? ""}
         lastAudit={lastAudit}
+        refreshFeedAction={refreshFeedFromButton}
       />
     </main>
   );
