@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { buildAccountCompleteTweetMap, initialsFromName } from "@/app/lib/accounts";
 import { buildTickerCounts, buildTickerOverlap } from "@/app/lib/overlap";
 import { tweetsByAuthor as staticTweetsByAuthor } from "@/app/lib/static-data";
+import type { Tweet } from "@/app/lib/types";
 import { getAuthorBySlug, getTrackedAuthors } from "@/lib/accounts/server";
 import { getAccountTickerCountsFromDb, getCachedTweetsByAuthor, getTickerMentionGroupsFromDb } from "@/lib/x/cache";
 import {
@@ -14,6 +15,31 @@ import {
 type AccountPageProps = {
   params: Promise<{ slug: string }>;
 };
+
+function getTweetSortTime(tweet: Tweet): bigint {
+  if (tweet.posted_at_iso) {
+    const timestamp = Date.parse(tweet.posted_at_iso);
+    if (Number.isFinite(timestamp)) {
+      return BigInt(timestamp);
+    }
+  }
+
+  try {
+    return BigInt(tweet.id);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+function sortTweetsNewestFirst(tweets: readonly Tweet[]): Tweet[] {
+  return [...tweets].sort((a, b) => {
+    const bTime = getTweetSortTime(b);
+    const aTime = getTweetSortTime(a);
+
+    if (bTime === aTime) return 0;
+    return bTime > aTime ? 1 : -1;
+  });
+}
 
 export default async function AccountPage({ params }: AccountPageProps) {
   const { slug } = await params;
@@ -38,7 +64,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
     dataSource = "cached";
   }
 
-  const accountTweets = tweetsByAuthor[author.key] ?? [];
+  const accountTweets = sortTweetsNewestFirst(tweetsByAuthor[author.key] ?? []);
   const tickerCounts = cachedTickerCounts && Object.keys(cachedTickerCounts).length
     ? cachedTickerCounts
     : buildTickerCounts(accountTweets);

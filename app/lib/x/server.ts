@@ -176,6 +176,7 @@ export async function fetchTweetsForAuthorWithDiagnostic(
     id: t.id,
     text: t.text,
     created_at: formatDate(t.created_at),
+    posted_at_iso: t.created_at,
     postedAtIso: t.created_at,
     likes: t.public_metrics.like_count,
     retweets: t.public_metrics.retweet_count,

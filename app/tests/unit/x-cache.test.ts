@@ -38,11 +38,13 @@ describe("X cache ticker mentions", () => {
   });
 
   it("builds shared and unique overlap groups from persisted mention rows", async () => {
-    queryRows.mockResolvedValueOnce([
-      { author_key: "alpha", ticker: "AMD", count: 2 },
-      { author_key: "beta", ticker: "AMD", count: 1 },
-      { author_key: "beta", ticker: "MXL", count: 1 },
-    ]);
+    queryRows
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        { author_key: "alpha", ticker: "AMD", count: 2 },
+        { author_key: "beta", ticker: "AMD", count: 1 },
+        { author_key: "beta", ticker: "MXL", count: 1 },
+      ]);
 
     const { getTickerMentionGroupsFromDb } = await import("@/lib/x/cache");
     const groups = await getTickerMentionGroupsFromDb([

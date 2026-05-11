@@ -883,6 +883,38 @@ a.cashtag-tag:focus-visible,
   padding: 16px;
 }
 
+.refresh-log-day {
+  display: grid;
+  gap: 10px;
+}
+
+.refresh-log-day-toggle {
+  align-items: center;
+  background: #101624;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #dbe7ff;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  justify-content: space-between;
+  padding: 12px 14px;
+  text-align: left;
+}
+
+.refresh-log-day-toggle span:last-child {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.refresh-log-day-runs {
+  display: grid;
+  gap: 16px;
+}
+
 .refresh-log-run-header {
   display: flex;
   align-items: flex-start;

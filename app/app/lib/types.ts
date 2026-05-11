@@ -20,6 +20,7 @@ export type Tweet = {
   id: string;
   text: string;
   created_at: string;
+  posted_at_iso?: string;
   likes: number;
   retweets: number;
   replies: number;

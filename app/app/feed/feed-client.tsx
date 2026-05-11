@@ -73,6 +73,29 @@ function formatRefreshTime(timestamp: string) {
   })} AEST`;
 }
 
+function getTweetSortTime(tweet: Tweet): bigint {
+  if (tweet.posted_at_iso) {
+    const parsed = Date.parse(tweet.posted_at_iso);
+    if (Number.isFinite(parsed)) return BigInt(parsed);
+  }
+
+  try {
+    return BigInt(tweet.id);
+  } catch {
+    return BigInt(0);
+  }
+}
+
+function sortTweetsNewestFirst<T extends Tweet>(tweets: readonly T[]): T[] {
+  return [...tweets].sort((a, b) => {
+    const bTime = getTweetSortTime(b);
+    const aTime = getTweetSortTime(a);
+    if (bTime > aTime) return 1;
+    if (bTime < aTime) return -1;
+    return b.id.localeCompare(a.id);
+  });
+}
+
 function normalizeTicker(ticker: string) {
   return ticker.trim().replace(/^\$/, "");
 }
@@ -178,9 +201,10 @@ export function FeedClient({
   );
   const allTweets = useMemo(
     () =>
-      (Object.entries(tweetsByAuthor) as [string, readonly Tweet[]][])
-        .flatMap(([who, tweets]) => tweets.map((tweet) => ({ ...tweet, who })))
-        .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1)),
+      sortTweetsNewestFirst(
+        (Object.entries(tweetsByAuthor) as [string, readonly Tweet[]][])
+          .flatMap(([who, tweets]) => tweets.map((tweet) => ({ ...tweet, who }))),
+      ),
     [tweetsByAuthor],
   );
   const fallbackTickerGroups = useMemo(() => buildTickerMentionGroups(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
@@ -188,7 +212,7 @@ export function FeedClient({
   const sharedOverlap = tickerGroups.shared;
   const activeAuthor = tab !== "all" && tab !== "overlap" ? tab : null;
   const activeTweets = useMemo(
-    () => (activeAuthor ? tweetsByAuthor[activeAuthor] ?? [] : allTweets),
+    () => (activeAuthor ? sortTweetsNewestFirst(tweetsByAuthor[activeAuthor] ?? []) : allTweets),
     [activeAuthor, allTweets, tweetsByAuthor],
   );
   const sourceTweets = useMemo(
