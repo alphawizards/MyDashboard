@@ -151,4 +151,39 @@ describe("X cache ticker mentions", () => {
       },
     ]);
   });
+
+  it("reports partial refresh-event insert failures without dropping successful inserts", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    queryRows
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new Error("insert failed"));
+
+    const { insertXAccountRefreshEvents } = await import("@/lib/x/cache");
+    const result = await insertXAccountRefreshEvents(9, [
+      {
+        authorKey: "alpha",
+        handle: "alpha",
+        previousLastTweetId: "100",
+        newLastTweetId: "101",
+        newTweetCount: 1,
+        newTweetIds: ["101"],
+        newTickers: ["AMD"],
+        status: "updated",
+      },
+      {
+        authorKey: "beta",
+        handle: "beta",
+        previousLastTweetId: "200",
+        newLastTweetId: "201",
+        newTweetCount: 1,
+        newTweetIds: ["201"],
+        newTickers: ["MXL"],
+        status: "updated",
+      },
+    ]);
+
+    expect(result).toEqual({ attempted: 2, inserted: 1, failed: 1 });
+    expect(queryRows).toHaveBeenCalledTimes(2);
+    expect(warn.mock.calls.flat().join("\n")).toContain("refresh.audit.events.partial_failure");
+  });
 });

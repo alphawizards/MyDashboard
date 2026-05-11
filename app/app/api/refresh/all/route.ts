@@ -87,6 +87,10 @@ function buildSkippedAccountEvents(status: XAccountRefreshLogEvent["status"], er
   }));
 }
 
+function countNewTweets(events: readonly XAccountRefreshLogEvent[]): number {
+  return events.reduce((sum, event) => sum + event.newTweetCount, 0);
+}
+
 export async function POST(request: Request) {
   const requestId = createRequestId(request);
   const startedAt = Date.now();
@@ -148,23 +152,25 @@ export async function POST(request: Request) {
         fetched = Object.fromEntries(
           Object.entries(tweetsByAuthor).map(([key, tweets]) => [key, tweets.length]),
         );
-        await insertXAccountRefreshEvents(refreshRunId, accountEvents);
+        const auditInsert = await insertXAccountRefreshEvents(refreshRunId, accountEvents);
         yahoo = await refreshAccountTickerFacts(requestId, tweetsByAuthor);
         mode = "live";
         message = "Feed cache revalidated after live X fetch.";
-        logger.info("refresh.x.success", { requestId, fetched });
+        logger.info("refresh.x.success", { requestId, fetched, auditInsert });
       } catch (err) {
         mode = "live-fallback";
         message = err instanceof Error ? err.message : "Live X refresh failed; feed cache was still revalidated.";
         logger.warn("refresh.x.failure", { requestId, error: serializeError(err) });
         accountEvents = buildSkippedAccountEvents("failed", message);
-        await insertXAccountRefreshEvents(refreshRunId, accountEvents);
+        const auditInsert = await insertXAccountRefreshEvents(refreshRunId, accountEvents);
+        logger.info("refresh.audit.events.saved", { requestId, auditInsert });
         yahoo = await refreshAccountTickerFacts(requestId);
       }
     } else {
       logger.info("refresh.x.skipped", { requestId, reason: "not_configured" });
       accountEvents = buildSkippedAccountEvents("skipped", "X_BEARER_TOKEN is not configured.");
-      await insertXAccountRefreshEvents(refreshRunId, accountEvents);
+      const auditInsert = await insertXAccountRefreshEvents(refreshRunId, accountEvents);
+      logger.info("refresh.audit.events.saved", { requestId, auditInsert });
       yahoo = await refreshAccountTickerFacts(requestId);
     }
 
@@ -177,7 +183,7 @@ export async function POST(request: Request) {
     logger.info("refresh.revalidate.success", { requestId });
 
     const durationMs = Date.now() - startedAt;
-    const totalNewTweets = Object.values(fetched ?? {}).reduce((sum, count) => sum + count, 0);
+    const totalNewTweets = countNewTweets(accountEvents);
     const audit: XRefreshAuditSummary = {
       runId: refreshRunId,
       triggeredBy,

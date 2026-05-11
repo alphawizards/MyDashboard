@@ -1,6 +1,7 @@
 import "server-only";
 import type { AuthorProfile, TickerMentionGroups, TickerOverlap, Tweet } from "@/app/lib/types";
 import { queryRows } from "@/lib/db/postgres";
+import { logger, serializeError } from "@/lib/logger";
 
 export type CacheableTweet = Tweet & {
   postedAtIso?: string;
@@ -44,6 +45,12 @@ export type XRefreshLogRun = {
   message: string | null;
   totalNewTweets: number;
   accounts: XAccountRefreshLogEvent[];
+};
+
+export type XAccountRefreshEventInsertResult = {
+  attempted: number;
+  inserted: number;
+  failed: number;
 };
 
 type TweetRow = {
@@ -355,38 +362,61 @@ export async function completeXRefreshRun(input: {
 export async function insertXAccountRefreshEvents(
   runId: number | null,
   events: readonly XAccountRefreshLogEvent[],
-): Promise<void> {
-  if (runId === null || !events.length) return;
-
-  try {
-    await Promise.all(
-      events.map((event) =>
-        queryRows(
-          `
-            insert into x_account_refresh_events (
-              refresh_run_id, author_key, handle, previous_last_tweet_id, new_last_tweet_id,
-              new_tweet_count, new_tweet_ids, new_tickers, status, error
-            )
-            values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10)
-          `,
-          [
-            runId,
-            event.authorKey,
-            event.handle,
-            event.previousLastTweetId,
-            event.newLastTweetId,
-            event.newTweetCount,
-            JSON.stringify(event.newTweetIds),
-            JSON.stringify(event.newTickers),
-            event.status,
-            event.error ?? null,
-          ],
-        ),
-      ),
-    );
-  } catch {
-    // Audit logging is best-effort and must not fail the refresh itself.
+): Promise<XAccountRefreshEventInsertResult> {
+  if (runId === null || !events.length) {
+    return { attempted: 0, inserted: 0, failed: 0 };
   }
+
+  const results = await Promise.allSettled(
+    events.map(async (event) => {
+      const rows = await queryRows(
+        `
+          insert into x_account_refresh_events (
+            refresh_run_id, author_key, handle, previous_last_tweet_id, new_last_tweet_id,
+            new_tweet_count, new_tweet_ids, new_tickers, status, error
+          )
+          values ($1,$2,$3,$4,$5,$6,$7::jsonb,$8::jsonb,$9,$10)
+        `,
+        [
+          runId,
+          event.authorKey,
+          event.handle,
+          event.previousLastTweetId,
+          event.newLastTweetId,
+          event.newTweetCount,
+          JSON.stringify(event.newTweetIds),
+          JSON.stringify(event.newTickers),
+          event.status,
+          event.error ?? null,
+        ],
+      );
+
+      if (rows === null) {
+        throw new Error("Refresh audit database unavailable.");
+      }
+    }),
+  );
+  const failedResults = results.filter((result) => result.status === "rejected");
+  const summary = {
+    attempted: events.length,
+    inserted: events.length - failedResults.length,
+    failed: failedResults.length,
+  };
+
+  if (summary.failed > 0) {
+    logger.warn("refresh.audit.events.partial_failure", {
+      runId,
+      attempted: summary.attempted,
+      inserted: summary.inserted,
+      failed: summary.failed,
+      handles: events
+        .filter((_, index) => results[index]?.status === "rejected")
+        .map((event) => event.handle),
+      errors: failedResults.map((result) => serializeError(result.reason)),
+    });
+  }
+
+  return summary;
 }
 
 export async function getXRefreshLogRuns(limit = 25): Promise<XRefreshLogRun[]> {
