@@ -22,6 +22,7 @@ const author = {
 
 describe("X cache ticker mentions", () => {
   beforeEach(() => {
+    vi.resetModules();
     queryRows.mockReset();
   });
 
@@ -95,6 +96,7 @@ describe("X cache ticker mentions", () => {
 
   it("loads refresh log runs with account events", async () => {
     queryRows
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([
         {
           id: "7",
@@ -156,6 +158,7 @@ describe("X cache ticker mentions", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     queryRows
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockRejectedValueOnce(new Error("insert failed"));
 
     const { insertXAccountRefreshEvents } = await import("@/lib/x/cache");
@@ -183,7 +186,27 @@ describe("X cache ticker mentions", () => {
     ]);
 
     expect(result).toEqual({ attempted: 2, inserted: 1, failed: 1 });
-    expect(queryRows).toHaveBeenCalledTimes(2);
+    expect(queryRows).toHaveBeenCalledTimes(3);
     expect(warn.mock.calls.flat().join("\n")).toContain("refresh.audit.events.partial_failure");
+  });
+
+  it("creates refresh log tables before inserting a run", async () => {
+    queryRows
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ id: "11" }]);
+
+    const { createXRefreshRun } = await import("@/lib/x/cache");
+    const runId = await createXRefreshRun({
+      requestId: "req-schema",
+      triggeredBy: "button",
+      startedAtIso: "2026-05-11T00:00:00.000Z",
+    });
+    const schemaSql = String(queryRows.mock.calls[0]?.[0]);
+    const insertSql = String(queryRows.mock.calls[1]?.[0]);
+
+    expect(runId).toBe(11);
+    expect(schemaSql).toContain("create table if not exists x_refresh_runs");
+    expect(schemaSql).toContain("create table if not exists x_account_refresh_events");
+    expect(insertSql).toContain("insert into x_refresh_runs");
   });
 });
