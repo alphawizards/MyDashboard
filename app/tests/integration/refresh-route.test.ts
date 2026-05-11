@@ -105,7 +105,7 @@ describe("/api/refresh/all", () => {
     expect(body.audit).toMatchObject({
       runId: null,
       triggeredBy: "unknown",
-      totalNewTweets: 5,
+      totalNewTweets: 1,
       accounts: [
         {
           authorKey: "s",
@@ -120,6 +120,49 @@ describe("/api/refresh/all", () => {
     expect(revalidatePath).toHaveBeenCalledWith("/watchlist");
     expect(body.providers.farside.status).toBe("ok");
     expect(body.requestId).toBeTruthy();
+  });
+
+  it("uses persisted account events as the refresh log total", async () => {
+    fetchAllTweetsWithDiagnostics.mockResolvedValue({
+      tweetsByAuthor: {
+        s: [{ id: "s1" }, { id: "s2" }, { id: "s3" }],
+        w: [{ id: "w1" }],
+      },
+      diagnostics: {
+        s: { handle: "michaelsikand", userLookup: { ok: true, status: 200 }, tweets: { ok: true, status: 200, returned: 3 } },
+        w: { handle: "peterjwolff", userLookup: { ok: true, status: 200 }, tweets: { ok: true, status: 200, returned: 1 } },
+      },
+      accountEvents: [
+        {
+          authorKey: "s",
+          handle: "michaelsikand",
+          previousLastTweetId: "100",
+          newLastTweetId: "102",
+          newTweetCount: 2,
+          newTweetIds: ["101", "102"],
+          newTickers: ["AMD"],
+          status: "updated",
+        },
+        {
+          authorKey: "w",
+          handle: "peterjwolff",
+          previousLastTweetId: "200",
+          newLastTweetId: "201",
+          newTweetCount: 1,
+          newTweetIds: ["201"],
+          newTickers: ["MXL"],
+          status: "updated",
+        },
+      ],
+    });
+
+    const { POST } = await import("../../app/api/refresh/all/route");
+    const response = await POST(new Request("http://localhost/api/refresh/all", { method: "POST" }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.fetched).toEqual({ s: 3, w: 1 });
+    expect(body.audit.totalNewTweets).toBe(3);
   });
 
   it("refreshes Yahoo facts from live and fallback account cashtags", async () => {
