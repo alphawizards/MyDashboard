@@ -53,6 +53,16 @@ function isHot(tweet: Tweet) {
   return tweet.likes >= 50 || tweet.retweets >= 5;
 }
 
+function compareTweetIdsAsc(a: Tweet, b: Tweet): number {
+  try {
+    const left = BigInt(a.id);
+    const right = BigInt(b.id);
+    return left < right ? -1 : left > right ? 1 : 0;
+  } catch {
+    return a.id.localeCompare(b.id);
+  }
+}
+
 function safeOpen(url: string) {
   try {
     const parsed = new URL(url);
@@ -180,7 +190,7 @@ export function FeedClient({
     () =>
       (Object.entries(tweetsByAuthor) as [string, readonly Tweet[]][])
         .flatMap(([who, tweets]) => tweets.map((tweet) => ({ ...tweet, who })))
-        .sort((a, b) => (BigInt(b.id) > BigInt(a.id) ? 1 : -1)),
+        .sort(compareTweetIdsAsc),
     [tweetsByAuthor],
   );
   const fallbackTickerGroups = useMemo(() => buildTickerMentionGroups(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
@@ -188,7 +198,7 @@ export function FeedClient({
   const sharedOverlap = tickerGroups.shared;
   const activeAuthor = tab !== "all" && tab !== "overlap" ? tab : null;
   const activeTweets = useMemo(
-    () => (activeAuthor ? tweetsByAuthor[activeAuthor] ?? [] : allTweets),
+    () => (activeAuthor ? [...(tweetsByAuthor[activeAuthor] ?? [])].sort(compareTweetIdsAsc) : allTweets),
     [activeAuthor, allTweets, tweetsByAuthor],
   );
   const sourceTweets = useMemo(
