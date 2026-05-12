@@ -1,6 +1,7 @@
 "use server";
 
 import { POST } from "@/app/api/refresh/all/route";
+import type { XRefreshAuditSummary } from "@/lib/x/cache";
 
 export type RefreshFeedActionResult = {
   ok?: boolean;
@@ -11,20 +12,7 @@ export type RefreshFeedActionResult = {
   message?: string;
   error?: string;
   status: number;
-  audit?: {
-    runId: number | null;
-    triggeredBy: "button" | "cron" | "unknown";
-    totalNewTweets: number;
-    accounts: {
-      authorKey: string;
-      handle: string;
-      newTweetCount: number;
-      newTweetIds: string[];
-      newTickers: string[];
-      status: "updated" | "no_new_tweets" | "failed" | "skipped";
-      error?: string;
-    }[];
-  };
+  audit?: XRefreshAuditSummary;
 };
 
 export async function refreshFeedFromButton(): Promise<RefreshFeedActionResult> {
@@ -35,6 +23,8 @@ export async function refreshFeedFromButton(): Promise<RefreshFeedActionResult> 
     headers.set("x-refresh-secret", refreshSecret);
   }
 
+  // In-process function call to the route handler, not an HTTP request.
+  // The URL string is only used for Request object construction.
   const response = await POST(new Request("http://localhost/api/refresh/all", {
     method: "POST",
     headers,
