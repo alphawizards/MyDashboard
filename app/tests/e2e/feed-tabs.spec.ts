@@ -101,3 +101,21 @@ test("feed ticker symbols link to Yahoo Finance", async ({ page }) => {
   await expect(bubbleTicker).toHaveAttribute("target", "_blank");
   await expect(bubbleTicker).toHaveAttribute("aria-label", /Open .+ on Yahoo Finance/);
 });
+
+test("feed tweet cards can switch to newest-first date order", async ({ page }) => {
+  await page.goto("/feed");
+
+  const firstTweetTime = page.locator(".tweet-card .tweet-time").first();
+  const oldestFirst = await firstTweetTime.textContent();
+
+  const newestFirstButton = page.getByRole("button", { name: "Newest First", exact: true });
+  await newestFirstButton.click();
+  await expect(newestFirstButton).toHaveAttribute("aria-pressed", "true");
+
+  const newestFirst = await firstTweetTime.textContent();
+  expect(newestFirst).not.toBe(oldestFirst);
+
+  await newestFirstButton.click();
+  await expect(newestFirstButton).toHaveAttribute("aria-pressed", "false");
+  await expect(firstTweetTime).toHaveText(oldestFirst ?? "");
+});

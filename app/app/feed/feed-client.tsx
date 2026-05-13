@@ -63,6 +63,10 @@ function compareTweetIdsAsc(a: Tweet, b: Tweet): number {
   }
 }
 
+function compareTweetIdsDesc(a: Tweet, b: Tweet): number {
+  return compareTweetIdsAsc(b, a);
+}
+
 function safeOpen(url: string) {
   try {
     const parsed = new URL(url);
@@ -140,6 +144,7 @@ export function FeedClient({
 }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
+  const [newestFirst, setNewestFirst] = useState(false);
   const [search, setSearch] = useState("");
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -205,16 +210,22 @@ export function FeedClient({
     () => (activeAuthor ? activeTweets.map((tweet) => ({ ...tweet, who: activeAuthor })) : allTweets),
     [activeAuthor, activeTweets, allTweets],
   );
-  const visibleTweets = sourceTweets.filter((tweet) => {
-    const q = search.trim().toLowerCase();
-    if (filter === "tickers" && tweet.cashtags.length === 0) return false;
-    if (filter === "hot" && !isHot(tweet)) return false;
-    if (tickerFilter && !tweet.cashtags.includes(tickerFilter)) return false;
-    if (q && !tweet.text.toLowerCase().includes(q) && !tweet.cashtags.some((tag) => tag.toLowerCase().includes(q))) {
-      return false;
-    }
-    return true;
-  });
+  const visibleTweets = useMemo(
+    () =>
+      sourceTweets
+        .filter((tweet) => {
+          const q = search.trim().toLowerCase();
+          if (filter === "tickers" && tweet.cashtags.length === 0) return false;
+          if (filter === "hot" && !isHot(tweet)) return false;
+          if (tickerFilter && !tweet.cashtags.includes(tickerFilter)) return false;
+          if (q && !tweet.text.toLowerCase().includes(q) && !tweet.cashtags.some((tag) => tag.toLowerCase().includes(q))) {
+            return false;
+          }
+          return true;
+        })
+        .sort(newestFirst ? compareTweetIdsDesc : compareTweetIdsAsc),
+    [filter, newestFirst, search, sourceTweets, tickerFilter],
+  );
   const activeTickerCounts = useMemo(() => {
     if (!initialTickerMentionGroups) return buildTickerCounts(activeTweets);
 
@@ -334,6 +345,14 @@ export function FeedClient({
             </button>
             <button className={`filter-btn ${filter === "hot" ? "active" : ""}`} onClick={() => setFilter("hot")}>
         {'Hot'}            </button>
+            <button
+              aria-pressed={newestFirst}
+              className={`filter-btn ${newestFirst ? "active" : ""}`}
+              onClick={() => setNewestFirst((current) => !current)}
+              type="button"
+            >
+              Newest First
+            </button>
             <input
               className="search-input"
               value={search}
