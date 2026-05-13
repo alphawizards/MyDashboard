@@ -91,6 +91,7 @@ describe("X cache ticker mentions", () => {
     const selectSql = String(queryRows.mock.calls[1]?.[0]);
 
     expect(schemaSql).toContain("create table if not exists tracked_accounts");
+    expect(schemaSql).toContain("create table if not exists tweets");
     expect(schemaSql).toContain("alter table tweets add column if not exists author_key text");
     expect(selectSql).toContain("order by posted_at asc, id asc");
     expect(cached?.alpha).toEqual([
