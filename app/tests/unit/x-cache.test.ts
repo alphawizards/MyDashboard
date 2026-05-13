@@ -38,7 +38,7 @@ describe("X cache ticker mentions", () => {
   });
 
   it("builds shared and unique overlap groups from persisted mention rows", async () => {
-    queryRows.mockResolvedValueOnce([
+    queryRows.mockResolvedValueOnce([]).mockResolvedValueOnce([
       { author_key: "alpha", ticker: "AMD", count: 2 },
       { author_key: "beta", ticker: "AMD", count: 1 },
       { author_key: "beta", ticker: "MXL", count: 1 },
@@ -65,6 +65,40 @@ describe("X cache ticker mentions", () => {
     expect(groups?.uniqueByAuthor).toEqual([
       { who: "alpha", tickers: [] },
       { who: "beta", tickers: [{ ticker: "MXL", who: "beta", count: 1, color: "#222222" }] },
+    ]);
+  });
+
+  it("ensures the cache schema before reading cached tweets in oldest-first order", async () => {
+    queryRows
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          author_key: "alpha",
+          id: "100",
+          text: "Older post",
+          posted_at: "2026-05-08T00:00:00.000Z",
+          url: "https://x.com/alpha/status/100",
+          like_count: 1,
+          retweet_count: 0,
+          reply_count: 0,
+          cashtags: ["AMD"],
+        },
+      ]);
+
+    const { getCachedTweetsByAuthor } = await import("@/lib/x/cache");
+    const cached = await getCachedTweetsByAuthor([author]);
+    const schemaSql = String(queryRows.mock.calls[0]?.[0]);
+    const selectSql = String(queryRows.mock.calls[1]?.[0]);
+
+    expect(schemaSql).toContain("create table if not exists tracked_accounts");
+    expect(schemaSql).toContain("alter table tweets add column if not exists author_key text");
+    expect(selectSql).toContain("order by posted_at asc, id asc");
+    expect(cached?.alpha).toEqual([
+      expect.objectContaining({
+        id: "100",
+        text: "Older post",
+        cashtags: ["AMD"],
+      }),
     ]);
   });
 

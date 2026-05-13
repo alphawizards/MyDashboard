@@ -15,6 +15,16 @@ type AccountPageProps = {
   params: Promise<{ slug: string }>;
 };
 
+function compareTweetIdsAsc(a: { id: string }, b: { id: string }): number {
+  try {
+    const left = BigInt(a.id);
+    const right = BigInt(b.id);
+    return left < right ? -1 : left > right ? 1 : 0;
+  } catch {
+    return a.id.localeCompare(b.id);
+  }
+}
+
 export default async function AccountPage({ params }: AccountPageProps) {
   const { slug } = await params;
   const author = getAuthorBySlug(slug);
@@ -38,7 +48,7 @@ export default async function AccountPage({ params }: AccountPageProps) {
     dataSource = "cached";
   }
 
-  const accountTweets = tweetsByAuthor[author.key] ?? [];
+  const accountTweets = [...(tweetsByAuthor[author.key] ?? [])].sort(compareTweetIdsAsc);
   const tickerCounts = cachedTickerCounts && Object.keys(cachedTickerCounts).length
     ? cachedTickerCounts
     : buildTickerCounts(accountTweets);
