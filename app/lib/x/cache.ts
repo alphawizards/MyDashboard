@@ -193,12 +193,23 @@ async function ensureXAccountCacheSchema(): Promise<boolean> {
         updated_at          timestamptz not null default now()
       );
 
+      create table if not exists tweets (
+        id            text primary key,
+        author_handle text not null,
+        author_id     text not null,
+        posted_at     timestamptz not null,
+        text          text not null,
+        url           text not null,
+        fetched_at    timestamptz not null default now()
+      );
+
       alter table tweets add column if not exists author_key text;
       alter table tweets add column if not exists like_count int not null default 0;
       alter table tweets add column if not exists retweet_count int not null default 0;
       alter table tweets add column if not exists reply_count int not null default 0;
       alter table tweets add column if not exists cashtags jsonb not null default '[]'::jsonb;
 
+      create index if not exists tweets_author_posted_idx on tweets (author_handle, posted_at desc);
       create index if not exists tweets_author_key_posted_idx on tweets (author_key, posted_at desc);
 
       create table if not exists tweet_ticker_mentions (
