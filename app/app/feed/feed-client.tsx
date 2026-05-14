@@ -12,6 +12,7 @@ import type { RefreshFeedActionResult } from "./actions";
 
 type Tab = "all" | "overlap" | string;
 type Filter = "all" | "tickers" | "hot";
+type SortOrder = "newest" | "oldest";
 
 type FeedClientProps = {
   authors: readonly AuthorProfile[];
@@ -65,6 +66,35 @@ function compareTweetIdsAsc(a: Tweet, b: Tweet): number {
 
 function compareTweetIdsDesc(a: Tweet, b: Tweet): number {
   return compareTweetIdsAsc(b, a);
+}
+
+function getTweetTime(tweet: Tweet): number | null {
+  if (!tweet.postedAtIso) return null;
+
+  const time = Date.parse(tweet.postedAtIso);
+  return Number.isNaN(time) ? null : time;
+}
+
+function compareTweetsAsc(a: Tweet, b: Tweet): number {
+  const left = getTweetTime(a);
+  const right = getTweetTime(b);
+
+  if (left !== null && right !== null && left !== right) {
+    return left - right;
+  }
+
+  return compareTweetIdsAsc(a, b);
+}
+
+function compareTweetsDesc(a: Tweet, b: Tweet): number {
+  const left = getTweetTime(a);
+  const right = getTweetTime(b);
+
+  if (left !== null && right !== null && left !== right) {
+    return right - left;
+  }
+
+  return compareTweetIdsDesc(a, b);
 }
 
 function safeOpen(url: string) {
@@ -144,7 +174,7 @@ export function FeedClient({
 }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
-  const [newestFirst, setNewestFirst] = useState(false);
+  const [sortOrder, setSortOrder] = useState<SortOrder>("newest");
   const [search, setSearch] = useState("");
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
@@ -195,7 +225,7 @@ export function FeedClient({
     () =>
       (Object.entries(tweetsByAuthor) as [string, readonly Tweet[]][])
         .flatMap(([who, tweets]) => tweets.map((tweet) => ({ ...tweet, who })))
-        .sort(compareTweetIdsAsc),
+        .sort(compareTweetsDesc),
     [tweetsByAuthor],
   );
   const fallbackTickerGroups = useMemo(() => buildTickerMentionGroups(tweetsByAuthor, colorByKey), [tweetsByAuthor, colorByKey]);
@@ -203,7 +233,7 @@ export function FeedClient({
   const sharedOverlap = tickerGroups.shared;
   const activeAuthor = tab !== "all" && tab !== "overlap" ? tab : null;
   const activeTweets = useMemo(
-    () => (activeAuthor ? [...(tweetsByAuthor[activeAuthor] ?? [])].sort(compareTweetIdsAsc) : allTweets),
+    () => (activeAuthor ? [...(tweetsByAuthor[activeAuthor] ?? [])].sort(compareTweetsDesc) : allTweets),
     [activeAuthor, allTweets, tweetsByAuthor],
   );
   const sourceTweets = useMemo(
@@ -223,8 +253,8 @@ export function FeedClient({
           }
           return true;
         })
-        .sort(newestFirst ? compareTweetIdsDesc : compareTweetIdsAsc),
-    [filter, newestFirst, search, sourceTweets, tickerFilter],
+        .sort(sortOrder === "newest" ? compareTweetsDesc : compareTweetsAsc),
+    [filter, search, sortOrder, sourceTweets, tickerFilter],
   );
   const activeTickerCounts = useMemo(() => {
     if (!initialTickerMentionGroups) return buildTickerCounts(activeTweets);
@@ -346,12 +376,13 @@ export function FeedClient({
             <button className={`filter-btn ${filter === "hot" ? "active" : ""}`} onClick={() => setFilter("hot")}>
         {'Hot'}            </button>
             <button
-              aria-pressed={newestFirst}
-              className={`filter-btn ${newestFirst ? "active" : ""}`}
-              onClick={() => setNewestFirst((current) => !current)}
+              aria-pressed={sortOrder === "newest"}
+              className={`filter-btn ${sortOrder === "newest" ? "active" : ""}`}
+              onClick={() => setSortOrder((current) => (current === "newest" ? "oldest" : "newest"))}
+              title={`Sort posts ${sortOrder === "newest" ? "oldest first" : "newest first"}`}
               type="button"
             >
-              Newest First
+              {sortOrder === "newest" ? "Newest First" : "Oldest First"}
             </button>
             <input
               className="search-input"
