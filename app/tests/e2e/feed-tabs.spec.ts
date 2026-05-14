@@ -102,20 +102,23 @@ test("feed ticker symbols link to Yahoo Finance", async ({ page }) => {
   await expect(bubbleTicker).toHaveAttribute("aria-label", /Open .+ on Yahoo Finance/);
 });
 
-test("feed tweet cards can switch to newest-first date order", async ({ page }) => {
+test("feed tweet cards can switch between newest-first and oldest-first date order", async ({ page }) => {
   await page.goto("/feed");
 
   const firstTweetTime = page.locator(".tweet-card .tweet-time").first();
-  const oldestFirst = await firstTweetTime.textContent();
+  const newestFirst = await firstTweetTime.textContent();
 
   const newestFirstButton = page.getByRole("button", { name: "Newest First", exact: true });
-  await newestFirstButton.click();
   await expect(newestFirstButton).toHaveAttribute("aria-pressed", "true");
 
-  const newestFirst = await firstTweetTime.textContent();
-  expect(newestFirst).not.toBe(oldestFirst);
-
   await newestFirstButton.click();
-  await expect(newestFirstButton).toHaveAttribute("aria-pressed", "false");
-  await expect(firstTweetTime).toHaveText(oldestFirst ?? "");
+  const oldestFirstButton = page.getByRole("button", { name: "Oldest First", exact: true });
+  await expect(oldestFirstButton).toHaveAttribute("aria-pressed", "false");
+
+  const oldestFirst = await firstTweetTime.textContent();
+  expect(oldestFirst).not.toBe(newestFirst);
+
+  await oldestFirstButton.click();
+  await expect(newestFirstButton).toHaveAttribute("aria-pressed", "true");
+  await expect(firstTweetTime).toHaveText(newestFirst ?? "");
 });
