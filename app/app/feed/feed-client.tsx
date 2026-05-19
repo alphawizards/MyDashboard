@@ -8,7 +8,6 @@ import { useResizeObserver } from "../lib/use-resize-observer";
 import { AddAccountForm } from "./add-account-form";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { RefreshFeedActionResult } from "./actions";
 
 type Tab = "all" | "overlap" | string;
 type Filter = "all" | "tickers" | "hot";
@@ -21,7 +20,6 @@ type FeedClientProps = {
   tickerMentionGroups?: ReturnType<typeof buildTickerMentionGroups> | null;
   accountCreationEnabled?: boolean;
   lastAudit: RefreshAuditSummary | null;
-  refreshFeedAction: () => Promise<RefreshFeedActionResult>;
 };
 
 type RefreshAuditAccount = {
@@ -39,6 +37,18 @@ type RefreshAuditSummary = {
   triggeredBy: "button" | "cron" | "unknown";
   totalNewTweets: number;
   accounts: RefreshAuditAccount[];
+};
+
+type RefreshFeedResult = {
+  ok?: boolean;
+  refreshed?: boolean;
+  requestId?: string;
+  lastRefreshTime?: string;
+  mode?: string;
+  message?: string;
+  error?: string;
+  status: number;
+  audit?: RefreshAuditSummary;
 };
 
 function decodeEntities(text: string) {
@@ -170,7 +180,6 @@ export function FeedClient({
   tickerMentionGroups: initialTickerMentionGroups = null,
   accountCreationEnabled = false,
   lastAudit,
-  refreshFeedAction,
 }: FeedClientProps) {
   const [tab, setTab] = useState<Tab>("all");
   const [filter, setFilter] = useState<Filter>("all");
@@ -189,7 +198,12 @@ export function FeedClient({
     setRefreshing(true);
     setRefreshError(null);
     try {
-      const data = await refreshFeedAction();
+      const response = await fetch("/api/refresh/button", {
+        method: "POST",
+        cache: "no-store",
+      });
+      const body = await response.json().catch(() => ({}));
+      const data = { ...body, status: response.status } as RefreshFeedResult;
       if (data.status >= 400) {
         throw new Error(data.error ?? `HTTP ${data.status}`);
       }
