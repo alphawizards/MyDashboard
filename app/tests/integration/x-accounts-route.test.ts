@@ -13,15 +13,17 @@ describe("POST /api/x-accounts", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     delete process.env.REFRESH_SHARED_SECRET;
+    delete process.env.ACCOUNT_CREATION_DISABLED;
     isXConfigured.mockReturnValue(false);
   });
 
   afterEach(() => {
     delete process.env.REFRESH_SHARED_SECRET;
+    delete process.env.ACCOUNT_CREATION_DISABLED;
   });
 
-  it("returns 401 when REFRESH_SHARED_SECRET is configured", async () => {
-    process.env.REFRESH_SHARED_SECRET = "admin-secret";
+  it("returns 401 when account creation is disabled", async () => {
+    process.env.ACCOUNT_CREATION_DISABLED = "true";
 
     const { POST } = await import("../../app/api/x-accounts/route");
     const res = await POST(new Request("http://localhost/api/x-accounts", {
@@ -32,7 +34,7 @@ describe("POST /api/x-accounts", () => {
     const body = await res.json();
 
     expect(res.status).toBe(401);
-    expect(body.error).toMatch(/not available/i);
+    expect(body.error).toMatch(/disabled/i);
     expect(addAccount).not.toHaveBeenCalled();
   });
 
@@ -140,6 +142,7 @@ describe("POST /api/x-accounts", () => {
 describe("GET /api/x-accounts", () => {
   afterEach(() => {
     delete process.env.REFRESH_SHARED_SECRET;
+    delete process.env.ACCOUNT_CREATION_DISABLED;
   });
 
   it("returns enabled=true when no secret is configured", async () => {
@@ -150,8 +153,8 @@ describe("GET /api/x-accounts", () => {
     expect(body.enabled).toBe(true);
   });
 
-  it("returns enabled=false when REFRESH_SHARED_SECRET is configured", async () => {
-    process.env.REFRESH_SHARED_SECRET = "set";
+  it("returns enabled=false when account creation is disabled", async () => {
+    process.env.ACCOUNT_CREATION_DISABLED = "true";
     const { GET } = await import("../../app/api/x-accounts/route");
     const res = await GET();
     const body = await res.json();

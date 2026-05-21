@@ -19,12 +19,12 @@ import { fetchAllTweetsWithDiagnostics, isXConfigured } from "@/lib/x/server";
 import type { XRefreshDiagnostics } from "@/lib/x/server";
 import { buildTickerMentionCounts, refreshTickerFacts } from "@/lib/stocks/account-tracker";
 
-function getAccountTickerRefreshPlan(tweetsByAuthor?: Record<string, Tweet[]>): {
+async function getAccountTickerRefreshPlan(tweetsByAuthor?: Record<string, Tweet[]>): Promise<{
   accounts: number;
   source: "live" | "mixed" | "static";
   tickers: string[];
-} {
-  const authors = getTrackedAuthors();
+}> {
+  const authors = await getTrackedAuthors();
   const completeTweetsByAuthor = buildAccountCompleteTweetMap(
     authors,
     tweetsByAuthor ? { ...staticTweetsByAuthor, ...tweetsByAuthor } : staticTweetsByAuthor,
@@ -53,7 +53,7 @@ async function refreshAccountTickerFacts(
   requestId: string,
   tweetsByAuthor?: Record<string, Tweet[]>,
 ): Promise<{ accounts: number; source: "live" | "mixed" | "static"; tickers: number }> {
-  const { accounts, source, tickers } = getAccountTickerRefreshPlan(tweetsByAuthor);
+  const { accounts, source, tickers } = await getAccountTickerRefreshPlan(tweetsByAuthor);
 
   if (!tickers.length) {
     logger.info("refresh.yahoo.accounts.skipped", { requestId, accounts, source, reason: "no_tickers" });
@@ -73,8 +73,9 @@ function getRefreshTrigger(request: Request): XRefreshTrigger {
   return "unknown";
 }
 
-function buildSkippedAccountEvents(status: XAccountRefreshLogEvent["status"], error?: string): XAccountRefreshLogEvent[] {
-  return getTrackedAuthors().map((author) => ({
+async function buildSkippedAccountEvents(status: XAccountRefreshLogEvent["status"], error?: string): Promise<XAccountRefreshLogEvent[]> {
+  const authors = await getTrackedAuthors();
+  return authors.map((author) => ({
     authorKey: author.key,
     handle: author.handle,
     previousLastTweetId: null,
@@ -161,20 +162,20 @@ export async function POST(request: Request) {
         mode = "live-fallback";
         message = err instanceof Error ? err.message : "Live X refresh failed; feed cache was still revalidated.";
         logger.warn("refresh.x.failure", { requestId, error: serializeError(err) });
-        accountEvents = buildSkippedAccountEvents("failed", message);
+        accountEvents = await buildSkippedAccountEvents("failed", message);
         const auditInsert = await insertXAccountRefreshEvents(refreshRunId, accountEvents);
         logger.info("refresh.audit.events.saved", { requestId, auditInsert });
         yahoo = await refreshAccountTickerFacts(requestId);
       }
     } else {
       logger.info("refresh.x.skipped", { requestId, reason: "not_configured" });
-      accountEvents = buildSkippedAccountEvents("skipped", "X_BEARER_TOKEN is not configured.");
+      accountEvents = await buildSkippedAccountEvents("skipped", "X_BEARER_TOKEN is not configured.");
       const auditInsert = await insertXAccountRefreshEvents(refreshRunId, accountEvents);
       logger.info("refresh.audit.events.saved", { requestId, auditInsert });
       yahoo = await refreshAccountTickerFacts(requestId);
     }
 
-    const accountPaths = getTrackedAuthors().map((author) => `/feed/accounts/${author.slug}`);
+    const accountPaths = (await getTrackedAuthors()).map((author) => `/feed/accounts/${author.slug}`);
     const revalidatePaths = ["/feed", ...accountPaths, "/watchlist"];
     logger.info("refresh.revalidate.start", { requestId, paths: revalidatePaths });
     revalidatePath("/feed");

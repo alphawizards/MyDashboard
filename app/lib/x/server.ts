@@ -210,7 +210,7 @@ export async function fetchAllTweetsWithDiagnostics(): Promise<{
   diagnostics: XRefreshDiagnostics;
   accountEvents: XRefreshAuditEvent[];
 }> {
-  const authors = getTrackedAuthors();
+  const authors = await getTrackedAuthors();
   await upsertTrackedAccounts(authors);
   const cachedAccountRows = await getCachedAccountRows(authors.map((author) => author.key));
   const authorHandles = Object.fromEntries(

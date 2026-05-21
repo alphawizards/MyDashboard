@@ -27,13 +27,13 @@ function compareTweetIdsAsc(a: { id: string }, b: { id: string }): number {
 
 export default async function AccountPage({ params }: AccountPageProps) {
   const { slug } = await params;
-  const author = getAuthorBySlug(slug);
+  const author = await getAuthorBySlug(slug);
 
   if (!author) {
     notFound();
   }
 
-  const authors = getTrackedAuthors();
+  const authors = await getTrackedAuthors();
   let tweetsByAuthor = buildAccountCompleteTweetMap(authors, staticTweetsByAuthor);
   let dataSource: "cached" | "static" = "static";
 

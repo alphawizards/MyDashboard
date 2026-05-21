@@ -10,7 +10,7 @@ import { getCachedTweetsByAuthor, getLastXRefreshAudit, getLastXRefreshTime, get
 export const revalidate = 1800;
 
 export default async function FeedPage() {
-  const authorProfiles = getTrackedAuthors();
+  const authorProfiles = await getTrackedAuthors();
   let tweetsByAuthor = buildAccountCompleteTweetMap(authorProfiles, staticTweetsByAuthor);
   let dataSource: "cached" | "static" = "static";
   let lastRefreshTime = "Not available";
@@ -70,7 +70,7 @@ export default async function FeedPage() {
         tweetsByAuthor={tweetsByAuthor}
         lastRefreshTime={lastRefreshTime}
         tickerMentionGroups={tickerMentionGroups}
-        accountCreationEnabled={!process.env.REFRESH_SHARED_SECRET}
+        accountCreationEnabled={process.env.ACCOUNT_CREATION_DISABLED !== "true"}
         lastAudit={lastAudit}
       />
     </main>
