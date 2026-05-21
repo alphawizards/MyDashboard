@@ -22,7 +22,7 @@ function statusLabel(run: XRefreshLogRun): string {
 export default async function RefreshLogPage() {
   const [runs, authors] = await Promise.all([
     getXRefreshLogRuns(30),
-    Promise.resolve(getTrackedAuthors()),
+    getTrackedAuthors(),
   ]);
   const authorByKey = Object.fromEntries(authors.map((author) => [author.key, author]));
 

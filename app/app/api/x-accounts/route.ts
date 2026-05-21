@@ -4,15 +4,41 @@ import { normalizeXHandle } from "@/app/lib/accounts";
 import { addAccount, findByHandle } from "@/lib/accounts/server";
 import { isXConfigured, verifyXUserExists } from "@/lib/x/server";
 
+function getRequestHosts(request: Request) {
+  const requestUrl = new URL(request.url);
+  return [
+    requestUrl.host,
+    request.headers.get("host"),
+    request.headers.get("x-forwarded-host"),
+  ].filter(Boolean);
+}
+
+function isAllowedOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  if (!origin) return true;
+
+  try {
+    const originHost = new URL(origin).host;
+    return getRequestHosts(request).includes(originHost);
+  } catch {
+    return false;
+  }
+}
+
+function isAccountCreationEnabled() {
+  return process.env.ACCOUNT_CREATION_DISABLED !== "true";
+}
+
 export async function POST(request: Request) {
-  // When REFRESH_SHARED_SECRET is configured, admin auth is assumed to exist
-  // but no client-facing auth mechanism is implemented yet. Disable account
-  // creation via the browser until a proper admin session is available.
-  if (process.env.REFRESH_SHARED_SECRET) {
+  if (!isAccountCreationEnabled()) {
     return NextResponse.json(
-      { ok: false, error: "Account creation is not available when admin auth is configured." },
+      { ok: false, error: "Account creation is disabled." },
       { status: 401 },
     );
+  }
+
+  if (!isAllowedOrigin(request)) {
+    return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
   let body: { handle?: string; name?: string };
@@ -49,7 +75,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const existing = findByHandle(handle);
+  const existing = await findByHandle(handle);
   if (existing) {
     return NextResponse.json(
       { ok: false, error: `Account @${handle} already exists (key: ${existing.key}).` },
@@ -68,14 +94,24 @@ export async function POST(request: Request) {
     }
   }
 
-  const profile = addAccount({ handle, name });
+  let profile;
+  try {
+    profile = await addAccount({ handle, name });
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: err instanceof Error ? err.message : "Account could not be saved." },
+      { status: 500 },
+    );
+  }
 
   revalidatePath("/feed");
+  revalidatePath(`/feed/accounts/${profile.slug}`);
+  revalidatePath("/feed/refresh-log");
 
   return NextResponse.json({ ok: true, account: profile }, { status: 201 });
 }
 
 export async function GET() {
-  const enabled = !process.env.REFRESH_SHARED_SECRET;
+  const enabled = isAccountCreationEnabled();
   return NextResponse.json({ enabled });
 }

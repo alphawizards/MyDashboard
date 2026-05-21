@@ -119,7 +119,7 @@ describe("X server client", () => {
 
   it("refreshes the current four tracked handles including Serenity's correct handle", async () => {
     const { getTrackedAuthors } = await import("@/lib/accounts/server");
-    vi.mocked(getTrackedAuthors).mockReturnValue(makeStaticAuthors());
+    vi.mocked(getTrackedAuthors).mockResolvedValue(makeStaticAuthors());
 
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -168,7 +168,7 @@ describe("X server client", () => {
 
   it("derives live refresh handles from the configured authors", async () => {
     const { getTrackedAuthors } = await import("@/lib/accounts/server");
-    vi.mocked(getTrackedAuthors).mockReturnValue([
+    vi.mocked(getTrackedAuthors).mockResolvedValue([
       { key: "s", slug: "sikand", name: "Michael Sikand", shortName: "Sikand", handle: "michaelsikand", color: "#4fc3f7", bio: "", followers: "63K", avatar: null },
       { key: "n", slug: "newauthor", name: "New Author", shortName: "NA", handle: "newauthor", color: "#06b6d4", bio: "", followers: "N/A", avatar: null },
     ]);
