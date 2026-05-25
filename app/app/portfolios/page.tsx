@@ -10,8 +10,8 @@ export default function PortfoliosPage() {
           <p className="eyebrow">Autopilot portfolios</p>
           <h1>Portfolio Tracker</h1>
           <p className="subtitle">
-            Tracks Autopilot portfolios from Michael Sikand and Peter Wolff. Sikand is populated from the
-            screenshots; Wolff is ready for the next data drop.
+            Tracks Autopilot portfolios from Michael Sikand, Peter Wolff, and mon@moninvestor. Sikand and
+            mon@moninvestor are populated from screenshots; Wolff is ready for the next data drop.
           </p>
         </div>
         <nav className="nav-actions" aria-label="Dashboard navigation">

@@ -174,7 +174,7 @@ export type PortfolioHolding = {
 
 export type AutopilotPortfolio = {
   id: string;
-  ownerKey: "sikand" | "wolff";
+  ownerKey: string;
   ownerName: string;
   title: string;
   status: "tracked" | "pending";

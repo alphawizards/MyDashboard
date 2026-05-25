@@ -43,8 +43,14 @@ export function PortfolioTabs({ portfolios }: PortfolioTabsProps) {
           <div className="portfolio-summary">
             {activePortfolio.returnAllTime === null ? (
               <div>
-                <strong className="portfolio-pending">Awaiting data</strong>
-                <span>Provide Wolff&apos;s screenshots or holdings to activate this tracker.</span>
+                <strong className="portfolio-pending">
+                  {activePortfolio.status === "tracked" ? "Return not captured" : "Awaiting data"}
+                </strong>
+                <span>
+                  {activePortfolio.status === "tracked"
+                    ? "Holdings and weights are captured from the provided screenshot."
+                    : "Provide Wolff's screenshots or holdings to activate this tracker."}
+                </span>
               </div>
             ) : (
               <div>
@@ -76,6 +82,7 @@ export function PortfolioTabs({ portfolios }: PortfolioTabsProps) {
                   <div>
                     <strong>{holding.ticker}</strong>
                     {holding.company ? <span>{holding.company}</span> : null}
+                    {holding.note ? <span>{holding.note}</span> : null}
                   </div>
                   <div className="portfolio-weight">
                     <span>{holding.weight}%</span>
